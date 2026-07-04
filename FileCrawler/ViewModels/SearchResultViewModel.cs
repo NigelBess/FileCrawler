@@ -15,7 +15,9 @@ public sealed class SearchResultViewModel : ObservableObject
 {
     private readonly CancellationToken _lifetime;
     private Bitmap? _image;
+    private Bitmap? _preview;
     private bool _thumbnailRequested;
+    private bool _previewRequested;
 
     /// <param name="lifetime">Cancelled when this result set is replaced, so a superseded row's
     /// still-queued thumbnail decode never runs.</param>
@@ -56,24 +58,51 @@ public sealed class SearchResultViewModel : ObservableObject
         private set => SetProperty(ref _image, value);
     }
 
+    /// <summary>True for rows that get an enlarged mouse-over preview (decodable image files).</summary>
+    public bool HasPreview => !IsDirectory && ThumbnailProvider.IsThumbnailable(Name);
+
+    /// <summary>
+    /// The enlarged hover preview. Read only when the tooltip actually opens, which is what starts the
+    /// decode — hovering is the trigger, so previews cost nothing until used. Falls back to the row
+    /// thumbnail while the sharper version is still decoding.
+    /// </summary>
+    public Bitmap? Preview
+    {
+        get
+        {
+            BeginPreviewLoad();
+            return _preview ?? _image;
+        }
+        private set => SetProperty(ref _preview, value);
+    }
+
     /// <summary>Fallback glyph shown before the name when no shell icon is available.</summary>
     public string Kind => IsDirectory ? "📁" : "📄";
 
     private void BeginThumbnailLoad()
     {
-        if (_thumbnailRequested || IsDirectory || !ThumbnailProvider.IsThumbnailable(Name))
+        if (_thumbnailRequested || !HasPreview)
             return;
         _thumbnailRequested = true;
-        _ = LoadThumbnailAsync();
+        _ = LoadAsync(ThumbnailProvider.GetThumbnailAsync, bitmap => Image = bitmap);
     }
 
-    private async Task LoadThumbnailAsync()
+    private void BeginPreviewLoad()
+    {
+        if (_previewRequested || !HasPreview)
+            return;
+        _previewRequested = true;
+        _ = LoadAsync(ThumbnailProvider.GetPreviewAsync, bitmap => Preview = bitmap);
+    }
+
+    private async Task LoadAsync(
+        Func<string, DateTime, CancellationToken, Task<Bitmap?>> load, Action<Bitmap> apply)
     {
         try
         {
-            var thumbnail = await ThumbnailProvider.GetThumbnailAsync(FullPath, Node.ModifiedUtc, _lifetime);
-            if (thumbnail is not null && !_lifetime.IsCancellationRequested)
-                Dispatcher.UIThread.Post(() => Image = thumbnail);
+            var bitmap = await load(FullPath, Node.ModifiedUtc, _lifetime);
+            if (bitmap is not null && !_lifetime.IsCancellationRequested)
+                Dispatcher.UIThread.Post(() => apply(bitmap));
         }
         catch (OperationCanceledException)
         {

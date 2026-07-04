@@ -76,6 +76,20 @@ public class ThumbnailProviderTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task Preview_is_decoded_at_the_larger_width_and_cached_separately()
+    {
+        var path = WritePng("preview.png", width: 400, height: 300);
+        var modified = DateTime.UtcNow;
+
+        var thumb = await ThumbnailProvider.GetThumbnailAsync(path, modified, CancellationToken.None);
+        var preview = await ThumbnailProvider.GetPreviewAsync(path, modified, CancellationToken.None);
+
+        Assert.NotNull(preview);
+        Assert.Equal(ThumbnailProvider.PreviewWidth, preview!.PixelSize.Width);
+        Assert.NotSame(thumb, preview);
+    }
+
+    [AvaloniaFact]
     public async Task Corrupt_image_yields_null_instead_of_throwing()
     {
         var path = Path.Combine(_dir, "corrupt.png");
@@ -146,6 +160,33 @@ public class SearchResultThumbnailTests : IDisposable
         Assert.NotNull(vm.Image);
         Assert.NotSame(initial, vm.Image);
         Assert.Equal(ThumbnailProvider.DecodeWidth, vm.Image!.PixelSize.Width);
+    }
+
+    [AvaloniaFact]
+    public async Task Reading_Preview_loads_the_enlarged_version()
+    {
+        var vm = new SearchResultViewModel(NodeFor(WritePng("hover.png")));
+        Assert.True(vm.HasPreview);
+
+        _ = vm.Preview; // simulates the tooltip opening
+
+        var swapped = false;
+        vm.PropertyChanged += (_, e) => swapped |= e.PropertyName == nameof(vm.Preview);
+        for (var i = 0; i < 200 && !swapped; i++)
+        {
+            await Task.Delay(10);
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        Assert.True(swapped, "enlarged preview never loaded");
+        Assert.Equal(ThumbnailProvider.PreviewWidth, vm.Preview!.PixelSize.Width);
+    }
+
+    [AvaloniaFact]
+    public void Non_image_rows_have_no_preview()
+    {
+        var node = new FileNode { Name = "notes.txt", IsDirectory = false, ModifiedUtc = DateTime.UtcNow };
+        Assert.False(new SearchResultViewModel(node).HasPreview);
     }
 
     [AvaloniaFact]

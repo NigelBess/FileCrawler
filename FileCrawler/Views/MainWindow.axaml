@@ -177,7 +177,16 @@
                                     <MenuItem Header="Reveal in Explorer" Click="OnRevealResult"/>
                                 </ContextMenu>
                             </Grid.ContextMenu>
-                            <Panel Grid.Column="0" Width="32" Margin="0,0,8,0" VerticalAlignment="Center">
+                            <Panel Grid.Column="0" Width="32" Margin="0,0,8,0" VerticalAlignment="Center"
+                                   Background="Transparent"
+                                   ToolTip.ServiceEnabled="{Binding HasPreview}"
+                                   ToolTip.ShowDelay="300">
+                                <ToolTip.Tip>
+                                    <!-- Enlarged preview floating over the page; Preview shows the small
+                                         thumb until the sharper decode lands, then rebinds. -->
+                                    <Image Source="{Binding Preview}" MaxWidth="256" MaxHeight="256"
+                                           Stretch="Uniform"/>
+                                </ToolTip.Tip>
                                 <Image Width="32" Height="32" Source="{Binding Image}"
                                        IsVisible="{Binding Image, Converter={x:Static ObjectConverters.IsNotNull}}"/>
                                 <TextBlock Text="{Binding Kind}" VerticalAlignment="Center"
