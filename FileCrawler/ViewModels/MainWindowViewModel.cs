@@ -23,6 +23,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IFolderPicker _picker;
 
     private CancellationTokenSource? _searchCts;
+    private CancellationTokenSource? _resultsCts;
 
     [ObservableProperty] private string _searchText = "";
     [ObservableProperty] private bool _isBusy;
@@ -94,8 +95,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             var results = await _search.SearchAsync(criteria, cts.Token);
             if (cts.Token.IsCancellationRequested) return;
 
+            // Retire the displayed result set: any of its thumbnail decodes still queued exit early.
+            _resultsCts?.Cancel();
+            _resultsCts = new CancellationTokenSource();
+            var lifetime = _resultsCts.Token;
+
             Results.Clear();
-            foreach (var node in results.Items) Results.Add(new SearchResultViewModel(node));
+            foreach (var node in results.Items) Results.Add(new SearchResultViewModel(node, lifetime));
 
             ResultsSummary = criteria.IsEmpty
                 ? ""

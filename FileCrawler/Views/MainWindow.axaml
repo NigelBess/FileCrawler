@@ -8,6 +8,7 @@
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/app-icon.ico"
         Width="1000" Height="620"
+        WindowState="Maximized"
         Title="FileCrawler — Fast File Search">
 
     <Design.DataContext>
@@ -169,18 +170,18 @@
                      DoubleTapped="OnResultDoubleTapped">
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:SearchResultViewModel">
-                        <Grid ColumnDefinitions="Auto,2*,3*,Auto,Auto" Height="24">
+                        <Grid ColumnDefinitions="Auto,2*,3*,Auto,Auto" Height="40">
                             <Grid.ContextMenu>
                                 <ContextMenu>
                                     <MenuItem Header="Open" Click="OnOpenResult"/>
                                     <MenuItem Header="Reveal in Explorer" Click="OnRevealResult"/>
                                 </ContextMenu>
                             </Grid.ContextMenu>
-                            <Panel Grid.Column="0" Width="16" Margin="0,0,8,0" VerticalAlignment="Center">
-                                <Image Width="16" Height="16" Source="{Binding Icon}"
-                                       IsVisible="{Binding Icon, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                            <Panel Grid.Column="0" Width="32" Margin="0,0,8,0" VerticalAlignment="Center">
+                                <Image Width="32" Height="32" Source="{Binding Image}"
+                                       IsVisible="{Binding Image, Converter={x:Static ObjectConverters.IsNotNull}}"/>
                                 <TextBlock Text="{Binding Kind}" VerticalAlignment="Center"
-                                           IsVisible="{Binding Icon, Converter={x:Static ObjectConverters.IsNull}}"/>
+                                           IsVisible="{Binding Image, Converter={x:Static ObjectConverters.IsNull}}"/>
                             </Panel>
                             <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center"
                                        TextTrimming="CharacterEllipsis"/>

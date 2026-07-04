@@ -42,7 +42,7 @@ public static class FileIconProvider
             var shfi = default(SHFILEINFO);
             // SHGFI_USEFILEATTRIBUTES resolves the icon from the name/attributes alone — no disk access.
             var result = SHGetFileInfo(dummyName, attributes, ref shfi, (uint)Marshal.SizeOf<SHFILEINFO>(),
-                SHGFI_ICON | SHGFI_SMALLICON | SHGFI_USEFILEATTRIBUTES);
+                SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
             if (result == IntPtr.Zero || shfi.hIcon == IntPtr.Zero)
                 return null;
 
@@ -70,7 +70,7 @@ public static class FileIconProvider
     private const uint FILE_ATTRIBUTE_DIRECTORY = 0x10;
     private const uint FILE_ATTRIBUTE_NORMAL = 0x80;
     private const uint SHGFI_ICON = 0x100;
-    private const uint SHGFI_SMALLICON = 0x1;
+    private const uint SHGFI_LARGEICON = 0x0; // 32px, matching the row's image slot
     private const uint SHGFI_USEFILEATTRIBUTES = 0x10;
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
