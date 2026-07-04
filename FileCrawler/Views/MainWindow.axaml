@@ -1,0 +1,107 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:FileCrawler.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="620"
+        x:Class="FileCrawler.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Icon="/Assets/app-icon.ico"
+        Width="1000" Height="620"
+        Title="FileCrawler — Fast File Search">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <Grid ColumnDefinitions="300,*">
+
+        <!-- Left: watched folders -->
+        <DockPanel Grid.Column="0" Background="{DynamicResource SystemControlBackgroundListLowBrush}">
+            <StackPanel DockPanel.Dock="Top" Margin="12,12,12,6" Spacing="8">
+                <TextBlock Text="Watched Folders" FontWeight="SemiBold" FontSize="15"/>
+                <Button Content="＋ Add folder…" HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Center"
+                        Command="{Binding AddFolderCommand}"/>
+            </StackPanel>
+
+            <TextBlock DockPanel.Dock="Bottom" Margin="12,6,12,12" FontSize="11"
+                       Foreground="Gray" TextWrapping="Wrap"
+                       IsVisible="{Binding !WatchedFolders.Count}"
+                       Text="No folders yet. Add a folder to crawl and search it."/>
+
+            <ListBox ItemsSource="{Binding WatchedFolders}" Margin="6,0,6,0"
+                     Background="Transparent">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:WatchedFolderViewModel">
+                        <Border Padding="6" CornerRadius="4">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTip.Tip="{Binding Path}"/>
+                                <TextBlock Text="{Binding Path}" FontSize="10" Foreground="Gray"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
+                                    <TextBlock Text="{Binding FormattedSize}" FontSize="11" Foreground="Gray"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Status}" FontSize="11" Foreground="#3B82F6"
+                                               VerticalAlignment="Center"/>
+                                    <Button Content="Refresh" FontSize="11" Padding="6,2"
+                                            Click="OnRefreshFolder"
+                                            IsEnabled="{Binding !IsBusy}"/>
+                                    <Button Content="Remove" FontSize="11" Padding="6,2"
+                                            Click="OnRemoveFolder"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </DockPanel>
+
+        <!-- Right: search + results -->
+        <DockPanel Grid.Column="1" Margin="12">
+            <TextBox DockPanel.Dock="Top" PlaceholderText="Search files and folders…"
+                     FontSize="16" Text="{Binding SearchText}"/>
+
+            <Grid DockPanel.Dock="Top" Margin="2,8,2,8" ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="{Binding ResultsSummary}" Foreground="Gray"
+                           VerticalAlignment="Center"/>
+                <ProgressBar Grid.Column="1" IsIndeterminate="True" Width="120" Height="4"
+                             IsVisible="{Binding IsBusy}"/>
+            </Grid>
+
+            <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusText}" Foreground="Gray"
+                       FontSize="11" Margin="2,8,2,0" TextWrapping="Wrap"/>
+
+            <ListBox x:Name="ResultsList" ItemsSource="{Binding Results}"
+                     DoubleTapped="OnResultDoubleTapped">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:SearchResultViewModel">
+                        <Grid ColumnDefinitions="Auto,2*,3*,Auto,Auto" Height="24">
+                            <Grid.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Open" Click="OnOpenResult"/>
+                                    <MenuItem Header="Reveal in Explorer" Click="OnRevealResult"/>
+                                </ContextMenu>
+                            </Grid.ContextMenu>
+                            <TextBlock Grid.Column="0" Text="{Binding Kind}" Margin="0,0,8,0"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Grid.Column="2" Text="{Binding FullPath}" Foreground="Gray"
+                                       FontSize="11" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Grid.Column="3" Text="{Binding FormattedSize}" Foreground="Gray"
+                                       FontSize="11" Width="80" TextAlignment="Right"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="4" Text="{Binding Modified}" Foreground="Gray"
+                                       FontSize="11" Width="130" TextAlignment="Right"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </DockPanel>
+    </Grid>
+</Window>

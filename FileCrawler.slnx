@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="FileCrawler/FileCrawler.csproj" />
+  <Project Path="FileCrawler.Tests/FileCrawler.Tests.csproj" />
+</Solution>
