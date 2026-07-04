@@ -85,8 +85,12 @@
                                     <MenuItem Header="Reveal in Explorer" Click="OnRevealResult"/>
                                 </ContextMenu>
                             </Grid.ContextMenu>
-                            <TextBlock Grid.Column="0" Text="{Binding Kind}" Margin="0,0,8,0"
-                                       VerticalAlignment="Center"/>
+                            <Panel Grid.Column="0" Width="16" Margin="0,0,8,0" VerticalAlignment="Center">
+                                <Image Width="16" Height="16" Source="{Binding Icon}"
+                                       IsVisible="{Binding Icon, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                <TextBlock Text="{Binding Kind}" VerticalAlignment="Center"
+                                           IsVisible="{Binding Icon, Converter={x:Static ObjectConverters.IsNull}}"/>
+                            </Panel>
                             <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center"
                                        TextTrimming="CharacterEllipsis"/>
                             <TextBlock Grid.Column="2" Text="{Binding FullPath}" Foreground="Gray"

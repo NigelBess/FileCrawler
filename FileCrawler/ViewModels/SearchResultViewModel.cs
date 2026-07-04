@@ -1,5 +1,7 @@
 using System;
+using Avalonia.Media.Imaging;
 using FileCrawler.Models;
+using FileCrawler.Services;
 using FileCrawler.Utilities;
 
 namespace FileCrawler.ViewModels;
@@ -17,6 +19,7 @@ public sealed class SearchResultViewModel
         Modified = node.ModifiedUtc == default
             ? ""
             : node.ModifiedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+        Icon = FileIconProvider.GetIcon(node.Name, node.IsDirectory);
     }
 
     public FileNode Node { get; }
@@ -26,6 +29,9 @@ public sealed class SearchResultViewModel
     public string FormattedSize { get; }
     public string Modified { get; }
 
-    /// <summary>Glyph shown before the name (folder vs file).</summary>
+    /// <summary>Shell icon for the file type; null off-Windows or when extraction fails.</summary>
+    public Bitmap? Icon { get; }
+
+    /// <summary>Fallback glyph shown before the name when no shell icon is available.</summary>
     public string Kind => IsDirectory ? "📁" : "📄";
 }
