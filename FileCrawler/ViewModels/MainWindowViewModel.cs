@@ -31,6 +31,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<WatchedFolderViewModel> WatchedFolders { get; } = new();
     public ObservableCollection<SearchResultViewModel> Results { get; } = new();
+    public SearchFiltersViewModel Filters { get; } = new();
 
     /// <summary>Design-time constructor (also used by the XAML previewer).</summary>
     public MainWindowViewModel()
@@ -40,6 +41,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _store = new WatchedFolderStore();
         _search = new SearchService(_index);
         _picker = new StorageFolderPicker(() => null);
+        Filters.CriteriaChanged += RerunSearch;
     }
 
     public MainWindowViewModel(
@@ -54,6 +56,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _store = store;
         _search = search;
         _picker = picker;
+        Filters.CriteriaChanged += RerunSearch;
     }
 
     /// <summary>Loads persisted watched folders and crawls them concurrently. Call once after the window shows.</summary>
@@ -86,17 +89,21 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         try
         {
             await Task.Delay(SearchDebounceMs, cts.Token);
-            var results = await _search.SearchAsync(query, cts.Token);
+            // Build criteria after the debounce so rapid filter clicks coalesce into one evaluation.
+            var criteria = Filters.BuildCriteria(query);
+            var results = await _search.SearchAsync(criteria, cts.Token);
             if (cts.Token.IsCancellationRequested) return;
 
             Results.Clear();
             foreach (var node in results.Items) Results.Add(new SearchResultViewModel(node));
 
-            ResultsSummary = string.IsNullOrWhiteSpace(query)
+            ResultsSummary = criteria.IsEmpty
                 ? ""
                 : results.Capped
                     ? $"Showing first {results.Items.Count:N0} of many — refine your search."
-                    : $"{results.Items.Count:N0} result(s).";
+                    : string.IsNullOrWhiteSpace(query)
+                        ? $"{results.Items.Count:N0} filtered item(s)."
+                        : $"{results.Items.Count:N0} result(s).";
         }
         catch (OperationCanceledException)
         {

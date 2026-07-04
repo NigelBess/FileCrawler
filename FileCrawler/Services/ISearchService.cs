@@ -4,8 +4,8 @@ using FileCrawler.Models;
 
 namespace FileCrawler.Services;
 
-/// <summary>Runs capped, cancellable name searches over the file index.</summary>
+/// <summary>Runs capped, cancellable searches over the file index by name and structured filters.</summary>
 public interface ISearchService
 {
-    Task<SearchResults> SearchAsync(string query, CancellationToken ct);
+    Task<SearchResults> SearchAsync(SearchCriteria criteria, CancellationToken ct);
 }

@@ -97,6 +97,49 @@ public class SearchUiTests : IDisposable
         Assert.Empty(vm.Results);
     }
 
+    [AvaloniaFact]
+    public async Task Extension_filter_narrows_results_and_clear_restores_them()
+    {
+        var (window, vm) = BuildUi();
+        await vm.AddFolderCommand.ExecuteAsync(null);
+
+        // "report list" would match nothing; search each file by a shared term instead.
+        vm.SearchText = "t"; // matches report.pdf, list.txt, Get Packed Bags, Projects
+        var txtOption = vm.Filters.Categories.Single(c => c.Name == "Documents")
+            .Extensions.Single(e => e.Name == ".txt");
+        txtOption.IsSelected = true;
+        await Task.Delay(500);
+        Dispatcher.UIThread.RunJobs();
+
+        var list = window.FindControl<ListBox>("ResultsList");
+        var items = list!.ItemsSource!.Cast<SearchResultViewModel>().ToList();
+        Assert.Contains(items, r => r.Name == "list.txt");
+        Assert.DoesNotContain(items, r => r.Name == "report.pdf");
+
+        vm.Filters.ClearFiltersCommand.Execute(null);
+        await Task.Delay(500);
+        Dispatcher.UIThread.RunJobs();
+
+        items = list.ItemsSource!.Cast<SearchResultViewModel>().ToList();
+        Assert.Contains(items, r => r.Name == "report.pdf");
+    }
+
+    [AvaloniaFact]
+    public async Task Filters_only_search_with_empty_query_shows_results()
+    {
+        var (_, vm) = BuildUi();
+        await vm.AddFolderCommand.ExecuteAsync(null);
+
+        vm.SearchText = "";
+        vm.Filters.Categories.Single(c => c.Name == "Documents").IsChecked = true;
+        await Task.Delay(500);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Contains(vm.Results, r => r.Name == "report.pdf");
+        Assert.Contains(vm.Results, r => r.Name == "list.txt");
+        Assert.DoesNotContain(vm.Results, r => r.Name == "Get Packed Bags"); // folders have no extension
+    }
+
     /// <summary>No-op persistence so tests don't touch %LOCALAPPDATA%.</summary>
     private sealed class NoopStore : IWatchedFolderStore
     {
