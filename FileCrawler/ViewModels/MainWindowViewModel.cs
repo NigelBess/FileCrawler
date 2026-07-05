@@ -29,6 +29,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private string _statusText = "Add a folder to start searching.";
     [ObservableProperty] private string _resultsSummary = "";
+    [ObservableProperty] private string _blockedSummary = "";
     [ObservableProperty] private bool _isSidebarExpanded;
 
     public ObservableCollection<WatchedFolderViewModel> WatchedFolders { get; } = new();
@@ -113,6 +114,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                     : string.IsNullOrWhiteSpace(query)
                         ? $"{results.Items.Count:N0} filtered item(s)."
                         : $"{results.Items.Count:N0} result(s).";
+
+            // Only meaningful when a search is showing results; blocked content is hidden regardless of query.
+            var blocked = _index.BlockedItems;
+            BlockedSummary = criteria.IsEmpty || blocked == 0
+                ? ""
+                : _index.BlockedItemsCapped
+                    ? $"Over {blocked:N0} more items in blocked folders aren’t shown."
+                    : $"{blocked:N0} item(s) in blocked folders aren’t shown.";
         }
         catch (OperationCanceledException)
         {

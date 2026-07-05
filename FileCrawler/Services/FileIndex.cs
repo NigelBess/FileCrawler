@@ -16,9 +16,13 @@ public sealed class FileIndex : IFileIndex
 
     private volatile IReadOnlyList<FileNode> _allNodes = System.Array.Empty<FileNode>();
     private volatile IReadOnlyList<FileNode> _roots = System.Array.Empty<FileNode>();
+    private volatile int _blockedItems;
+    private volatile bool _blockedItemsCapped;
 
     public IReadOnlyList<FileNode> Roots => _roots;
     public IReadOnlyList<FileNode> AllNodes => _allNodes;
+    public int BlockedItems => _blockedItems;
+    public bool BlockedItemsCapped => _blockedItemsCapped;
 
     public void AddRoot(CrawlResult result)
     {
@@ -58,5 +62,15 @@ public sealed class FileIndex : IFileIndex
         var combined = new List<FileNode>(total);
         foreach (var r in _results) combined.AddRange(r.AllNodes);
         _allNodes = combined;
+
+        var blocked = 0;
+        var blockedCapped = false;
+        foreach (var r in _results)
+        {
+            blocked += r.BlockedItems;
+            blockedCapped |= r.BlockedItemsCapped;
+        }
+        _blockedItems = blocked;
+        _blockedItemsCapped = blockedCapped;
     }
 }

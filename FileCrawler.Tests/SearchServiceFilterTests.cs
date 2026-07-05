@@ -42,13 +42,23 @@ public class SearchServiceFilterTests
     }
 
     [Fact]
-    public async Task Extension_filter_excludes_directories_and_extensionless_files()
+    public async Task Extension_filter_excludes_extensionless_files_and_folders_when_folders_off()
     {
         var results = await SearchAsync(
-            new SearchCriteria("", Extensions: [".png"]),
+            new SearchCriteria("", Extensions: [".png"], IncludeFolders: false),
             Dir("gallery.png"), File("README"), File("cat.png"));
 
         Assert.Equal(["cat.png"], results.Items.Select(n => n.Name));
+    }
+
+    [Fact]
+    public async Task Folders_are_included_alongside_matching_files_when_folders_on()
+    {
+        var results = await SearchAsync(
+            new SearchCriteria("", Extensions: [".png"], IncludeFolders: true),
+            Dir("gallery"), File("notes.txt"), File("cat.png"));
+
+        Assert.Equal(["gallery", "cat.png"], results.Items.Select(n => n.Name));
     }
 
     [Fact]
@@ -80,12 +90,14 @@ public class SearchServiceFilterTests
     }
 
     [Fact]
-    public async Task Kind_filter_selects_files_or_folders()
+    public async Task Folders_toggle_selects_files_or_folders()
     {
         FileNode[] nodes = [File("a.txt"), Dir("stuff")];
 
-        var files = await SearchAsync(new SearchCriteria("", Kind: NodeKindFilter.FilesOnly), nodes);
-        var folders = await SearchAsync(new SearchCriteria("", Kind: NodeKindFilter.FoldersOnly), nodes);
+        // All files (Extensions null), folders off => files only.
+        var files = await SearchAsync(new SearchCriteria("", Extensions: null, IncludeFolders: false), nodes);
+        // No files (empty allowlist), folders on => folders only.
+        var folders = await SearchAsync(new SearchCriteria("", Extensions: [], IncludeFolders: true), nodes);
 
         Assert.Equal(["a.txt"], files.Items.Select(n => n.Name));
         Assert.Equal(["stuff"], folders.Items.Select(n => n.Name));

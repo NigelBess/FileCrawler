@@ -10,7 +10,7 @@ using FileCrawler.Utilities;
 namespace FileCrawler.Services;
 
 /// <summary>
-/// Searches the file index by node name and structured filters (extension, size, modified date, kind),
+/// Searches the file index by node name and structured filters (extension, size, modified date, folders),
 /// reusing <see cref="UserSearchHelpers.FindAllMatches"/> for the forgiving name-match logic. Structured
 /// filters are cheap scalar checks and run before name matching to prune the expensive matcher. The scan
 /// runs off the UI thread, is cancellable per item, and stops once the result cap is reached — both the
@@ -48,49 +48,65 @@ public sealed class SearchService : ISearchService
     }, ct);
 
     /// <summary>
-    /// Precompiled structured predicate, built once per search. Extension checks are allocation-free:
-    /// <see cref="Path.GetExtension(ReadOnlySpan{char})"/> plus a span alternate lookup into the set, so
-    /// the per-node cost stays trivial over millions of nodes and <see cref="FileNode"/> needs no extra
-    /// fields. Directories never match an extension filter (they have none, and folders named "x.png"
-    /// would be noise). Size bounds are inclusive and apply to directories too — recursive directory size
-    /// makes "folders over 1 GB" a useful query.
+    /// Precompiled structured predicate, built once per search. Files and folders are two independent axes:
+    /// folders pass only when <see cref="SearchCriteria.IncludeFolders"/> is set, while files pass the
+    /// extension allowlist (null = every file, empty = no files, otherwise a specific set). Extension checks
+    /// are allocation-free: <see cref="Path.GetExtension(ReadOnlySpan{char})"/> plus a span alternate lookup
+    /// into the set, so the per-node cost stays trivial over millions of nodes and <see cref="FileNode"/>
+    /// needs no extra fields. Size bounds are inclusive and apply to directories too — recursive directory
+    /// size makes "folders over 1 GB" a useful query.
     /// </summary>
     private sealed class NodeFilter
     {
-        private readonly HashSet<string>? _extensions;
+        private readonly bool _filesAllowed;                 // false => extension allowlist was empty ("no files")
+        private readonly HashSet<string>? _extensions;       // null with _filesAllowed => every file passes
         private readonly HashSet<string>.AlternateLookup<ReadOnlySpan<char>> _extensionLookup;
+        private readonly bool _includeFolders;
         private readonly long? _minSize;
         private readonly long? _maxSize;
         private readonly DateTime? _afterUtc;
         private readonly DateTime? _beforeUtc;
-        private readonly NodeKindFilter _kind;
 
         public static NodeFilter? Create(SearchCriteria c) => c.HasFilters ? new NodeFilter(c) : null;
 
         private NodeFilter(SearchCriteria c)
         {
-            if (c.Extensions is { Count: > 0 })
+            if (c.Extensions is null)
             {
+                _filesAllowed = true;                        // no file-type restriction
+            }
+            else if (c.Extensions.Count == 0)
+            {
+                _filesAllowed = false;                       // every file excluded
+            }
+            else
+            {
+                _filesAllowed = true;
                 _extensions = new HashSet<string>(c.Extensions, StringComparer.OrdinalIgnoreCase);
                 _extensionLookup = _extensions.GetAlternateLookup<ReadOnlySpan<char>>();
             }
+
+            _includeFolders = c.IncludeFolders;
             _minSize = c.MinSizeBytes;
             _maxSize = c.MaxSizeBytes;
             _afterUtc = c.ModifiedAfterUtc;
             _beforeUtc = c.ModifiedBeforeUtc;
-            _kind = c.Kind;
         }
 
         public bool Matches(FileNode node)
         {
-            if (_kind == NodeKindFilter.FilesOnly && node.IsDirectory) return false;
-            if (_kind == NodeKindFilter.FoldersOnly && !node.IsDirectory) return false;
-
-            if (_extensions is not null)
+            if (node.IsDirectory)
             {
-                if (node.IsDirectory) return false;
-                var ext = Path.GetExtension(node.Name.AsSpan());
-                if (ext.IsEmpty || !_extensionLookup.Contains(ext)) return false;
+                if (!_includeFolders) return false;
+            }
+            else
+            {
+                if (!_filesAllowed) return false;
+                if (_extensions is not null)
+                {
+                    var ext = Path.GetExtension(node.Name.AsSpan());
+                    if (ext.IsEmpty || !_extensionLookup.Contains(ext)) return false;
+                }
             }
 
             if (_minSize.HasValue && node.SizeBytes < _minSize.Value) return false;

@@ -135,6 +135,8 @@ public class SearchUiTests : IDisposable
 
         // "report list" would match nothing; search each file by a shared term instead.
         vm.SearchText = "t"; // matches report.pdf, list.txt, Get Packed Bags, Projects
+        // Start from nothing selected, then narrow to just .txt files.
+        vm.Filters.SelectNoneCommand.Execute(null);
         var txtOption = vm.Filters.Categories.Single(c => c.Name == "Documents")
             .Extensions.Single(e => e.Name == ".txt");
         txtOption.IsSelected = true;
@@ -161,13 +163,15 @@ public class SearchUiTests : IDisposable
         await vm.AddFolderCommand.ExecuteAsync(null);
 
         vm.SearchText = "";
+        // Browse just Documents: clear everything (also drops folders), then check Documents.
+        vm.Filters.SelectNoneCommand.Execute(null);
         vm.Filters.Categories.Single(c => c.Name == "Documents").IsChecked = true;
         await Task.Delay(500);
         Dispatcher.UIThread.RunJobs();
 
         Assert.Contains(vm.Results, r => r.Name == "report.pdf");
         Assert.Contains(vm.Results, r => r.Name == "list.txt");
-        Assert.DoesNotContain(vm.Results, r => r.Name == "Get Packed Bags"); // folders have no extension
+        Assert.DoesNotContain(vm.Results, r => r.Name == "Get Packed Bags"); // folders unchecked
     }
 
     /// <summary>No-op persistence so tests don't touch %LOCALAPPDATA%.</summary>

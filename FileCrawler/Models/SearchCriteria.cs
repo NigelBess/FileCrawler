@@ -3,19 +3,20 @@ using System.Collections.Generic;
 
 namespace FileCrawler.Models;
 
-/// <summary>Restricts search results to files, folders, or both.</summary>
-public enum NodeKindFilter { All, FilesOnly, FoldersOnly }
-
 /// <summary>
 /// Everything the search service needs for one search: the text query plus optional structured filters.
 /// </summary>
 /// <param name="Query">Forgiving name query; may be empty when structured filters are active ("browse mode").</param>
-/// <param name="Extensions">Extensions to include, lowercase with leading dot (".png"); null or empty means no extension filter.</param>
+/// <param name="Extensions">
+/// File-extension allowlist, lowercase with leading dot (".png"). <c>null</c> means no file-type restriction
+/// (every file matches); a non-empty list restricts files to those extensions; an <em>empty</em> list matches
+/// no files at all (e.g. "folders only", or the user unchecking every type).
+/// </param>
 /// <param name="MinSizeBytes">Inclusive lower size bound; null means unbounded.</param>
 /// <param name="MaxSizeBytes">Inclusive upper size bound; null means unbounded.</param>
 /// <param name="ModifiedAfterUtc">Inclusive lower bound on last write time (UTC).</param>
 /// <param name="ModifiedBeforeUtc">Exclusive upper bound on last write time (UTC).</param>
-/// <param name="Kind">Restricts results to files, folders, or both.</param>
+/// <param name="IncludeFolders">Whether folders may appear in results; independent of the extension allowlist.</param>
 public sealed record SearchCriteria(
     string Query,
     IReadOnlyCollection<string>? Extensions = null,
@@ -23,16 +24,16 @@ public sealed record SearchCriteria(
     long? MaxSizeBytes = null,
     DateTime? ModifiedAfterUtc = null,
     DateTime? ModifiedBeforeUtc = null,
-    NodeKindFilter Kind = NodeKindFilter.All)
+    bool IncludeFolders = true)
 {
     /// <summary>True when any structured filter (beyond the text query) is active.</summary>
     public bool HasFilters =>
-        Extensions is { Count: > 0 }
+        Extensions is not null          // any file-type restriction — an allowlist, or (when empty) "no files"
+        || !IncludeFolders
         || MinSizeBytes.HasValue
         || MaxSizeBytes.HasValue
         || ModifiedAfterUtc.HasValue
-        || ModifiedBeforeUtc.HasValue
-        || Kind != NodeKindFilter.All;
+        || ModifiedBeforeUtc.HasValue;
 
     /// <summary>True when there is nothing to search by at all.</summary>
     public bool IsEmpty => string.IsNullOrWhiteSpace(Query) && !HasFilters;

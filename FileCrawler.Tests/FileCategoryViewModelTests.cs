@@ -60,19 +60,46 @@ public class FileCategoryViewModelTests
     }
 
     [Fact]
+    public void Filters_start_non_restrictive_with_everything_selected()
+    {
+        var filters = new SearchFiltersViewModel();
+
+        var criteria = filters.BuildCriteria("");
+
+        Assert.Null(criteria.Extensions); // every type checked = no file-type restriction
+        Assert.True(criteria.IncludeFolders);
+        Assert.False(criteria.HasFilters);
+        Assert.All(filters.Categories, c => Assert.True(c.IsChecked));
+    }
+
+    [Fact]
+    public void SelectNone_excludes_every_file_and_folder()
+    {
+        var filters = new SearchFiltersViewModel();
+
+        filters.SelectNoneCommand.Execute(null);
+        var criteria = filters.BuildCriteria("query");
+
+        Assert.NotNull(criteria.Extensions);
+        Assert.Empty(criteria.Extensions!); // empty allowlist = no files match
+        Assert.False(criteria.IncludeFolders);
+        Assert.True(criteria.HasFilters);
+        Assert.All(filters.Categories, c => Assert.False(c.IsChecked));
+    }
+
+    [Fact]
     public void ClearFilters_resets_everything_and_summary_flips()
     {
         var filters = new SearchFiltersViewModel();
+        filters.SelectNoneCommand.Execute(null);
         filters.Categories[0].IsChecked = true;
-        filters.CustomExtensionsText = "psd";
         filters.MinSizeText = "1";
         filters.SelectedDatePreset = SearchFiltersViewModel.DatePresetOptions.Single(o => o.Value == DatePreset.Today);
-        filters.SelectedKind = SearchFiltersViewModel.KindOptions.Single(o => o.Value == NodeKindFilter.FilesOnly);
 
         var criteria = filters.BuildCriteria("");
         Assert.True(criteria.HasFilters);
         Assert.True(filters.HasActiveFilters);
-        Assert.Equal("4 filter(s) active", filters.ActiveSummary);
+        Assert.Equal("3 filter(s) active", filters.ActiveSummary); // type + size + date
 
         filters.ClearFiltersCommand.Execute(null);
 
@@ -80,13 +107,14 @@ public class FileCategoryViewModelTests
         Assert.True(cleared.IsEmpty);
         Assert.False(filters.HasActiveFilters);
         Assert.Equal("", filters.ActiveSummary);
-        Assert.All(filters.Categories, c => Assert.False(c.IsChecked));
+        Assert.All(filters.Categories, c => Assert.True(c.IsChecked)); // cleared = back to "everything on"
     }
 
     [Fact]
     public void BuildCriteria_unions_category_and_custom_extensions_without_duplicates()
     {
         var filters = new SearchFiltersViewModel();
+        filters.SelectNoneCommand.Execute(null); // start from a clean slate so only Images is on
         var images = filters.Categories.Single(c => c.Name == "Images");
         images.IsChecked = true;
         filters.CustomExtensionsText = "png, psd"; // .png already in Images

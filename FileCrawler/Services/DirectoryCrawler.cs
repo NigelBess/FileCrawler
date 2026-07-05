@@ -15,12 +15,26 @@ namespace FileCrawler.Services;
 /// </summary>
 public sealed class DirectoryCrawler : IDirectoryCrawler
 {
+    /// <summary>
+    /// Upper bound on how many items we count beneath blocked folders. Blocking exists to avoid indexing
+    /// large trees, so we never fully enumerate one — counting stops here, and the UI reports "over N".
+    /// </summary>
+    public const int BlockedCountCap = 1000;
+
     // Recurse one level at a time so we can build the tree and fan out across subtrees ourselves.
     private static readonly EnumerationOptions Options = new()
     {
         RecurseSubdirectories = false,
         IgnoreInaccessible = true,
         AttributesToSkip = 0, // include hidden/system entries
+    };
+
+    // Blocked-subtree counting only needs a running tally, so recurse in one pass with no per-level fan-out.
+    private static readonly EnumerationOptions CountOptions = new()
+    {
+        RecurseSubdirectories = true,
+        IgnoreInaccessible = true,
+        AttributesToSkip = 0,
     };
 
     private static readonly IReadOnlySet<string> NoBlocked = new HashSet<string>();
@@ -57,7 +71,41 @@ public sealed class DirectoryCrawler : IDirectoryCrawler
             .ConfigureAwait(false);
 
         var all = Flatten(root);
-        return new CrawlResult(root, all, skipped);
+        var (blockedItems, blockedCapped) = CountBlocked(blocked, ct);
+        return new CrawlResult(root, all, skipped, blockedItems, blockedCapped);
+    }
+
+    /// <summary>
+    /// Counts files and subfolders beneath the blocked folders, stopping as soon as the running total reaches
+    /// <see cref="BlockedCountCap"/> so a huge blocked tree (e.g. node_modules) costs only a bounded scan.
+    /// Returns the tally and whether it was truncated at the cap (making the count a lower bound). Best-effort:
+    /// inaccessible or cancelled scans just contribute what they saw and never fail the crawl.
+    /// </summary>
+    private static (int Count, bool Capped) CountBlocked(IReadOnlySet<string> blocked, CancellationToken ct)
+    {
+        if (blocked.Count == 0) return (0, false);
+
+        var count = 0;
+        foreach (var folder in blocked)
+        {
+            if (ct.IsCancellationRequested) return (count, false);
+            try
+            {
+                // Project to a throwaway byte — we only care about the count of entries, not their data.
+                var entries = new FileSystemEnumerable<byte>(folder, static (ref FileSystemEntry _) => 0, CountOptions);
+                foreach (var _ in entries)
+                {
+                    if (++count >= BlockedCountCap) return (BlockedCountCap, true);
+                    if (ct.IsCancellationRequested) return (count, false);
+                }
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or DirectoryNotFoundException)
+            {
+                // Blocked folder gone or unreadable; skip it and keep the partial tally.
+            }
+        }
+
+        return (count, false);
     }
 
     /// <summary>

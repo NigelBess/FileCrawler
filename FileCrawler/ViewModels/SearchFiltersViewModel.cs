@@ -51,11 +51,13 @@ public sealed partial class FileCategoryViewModel : ViewModelBase
 
     public IEnumerable<string> SelectedExtensions => Extensions.Where(e => e.IsSelected).Select(e => e.Name);
 
-    public void Reset()
+    /// <summary>Checks or unchecks every extension in the category without raising the change callback,
+    /// so callers can batch bulk updates (Select all / Select none / Clear) into a single search rerun.</summary>
+    public void SetAll(bool on)
     {
         _updating = true;
-        foreach (var ext in Extensions) ext.IsSelected = false;
-        IsChecked = false;
+        foreach (var ext in Extensions) ext.IsSelected = on;
+        IsChecked = on;
         _updating = false;
     }
 
@@ -85,17 +87,13 @@ public sealed record DatePresetOption(DatePreset Value, string Label)
     public override string ToString() => Label;
 }
 
-/// <summary>A files/folders choice with a user-friendly label for the ComboBox.</summary>
-public sealed record KindOption(NodeKindFilter Value, string Label)
-{
-    public override string ToString() => Label;
-}
-
 /// <summary>
-/// State for the filter bar: file-type categories, custom extensions, size bounds, modified-date window and
-/// files/folders kind. Raises <see cref="CriteriaChanged"/> on every change; the owner reruns the (debounced)
-/// search and calls <see cref="BuildCriteria"/> at search time, so date presets are evaluated fresh each run.
-/// Filters are deliberately per-session — persisting them across restarts risks invisible sticky filters.
+/// State for the filter bar: file-type categories, a Folders toggle, custom extensions, size bounds and a
+/// modified-date window. The type checkboxes are an allowlist — everything starts checked (so a bare query
+/// still shows all matches), and unchecking narrows results; unchecking every type matches nothing. Raises
+/// <see cref="CriteriaChanged"/> on every change; the owner reruns the (debounced) search and calls
+/// <see cref="BuildCriteria"/> at search time, so date presets are evaluated fresh each run. Filters are
+/// deliberately per-session — persisting them across restarts risks invisible sticky filters.
 /// </summary>
 public sealed partial class SearchFiltersViewModel : ViewModelBase
 {
@@ -111,15 +109,9 @@ public sealed partial class SearchFiltersViewModel : ViewModelBase
         new(DatePreset.Custom, "Custom range…"),
     ];
 
-    public static IReadOnlyList<KindOption> KindOptions { get; } =
-    [
-        new(NodeKindFilter.All, "Files & folders"),
-        new(NodeKindFilter.FilesOnly, "Files only"),
-        new(NodeKindFilter.FoldersOnly, "Folders only"),
-    ];
-
     public IReadOnlyList<FileCategoryViewModel> Categories { get; }
 
+    [ObservableProperty] private bool _includeFolders = true;
     [ObservableProperty] private string _customExtensionsText = "";
     [ObservableProperty] private string _minSizeText = "";
     [ObservableProperty] private string _maxSizeText = "";
@@ -128,7 +120,6 @@ public sealed partial class SearchFiltersViewModel : ViewModelBase
     [ObservableProperty] private DatePresetOption _selectedDatePreset = DatePresetOptions[0];
     [ObservableProperty] private DateTime? _customFromDate;
     [ObservableProperty] private DateTime? _customToDate;
-    [ObservableProperty] private KindOption _selectedKind = KindOptions[0];
     [ObservableProperty] private bool _isExpanded = true;
     [ObservableProperty] private string _validationMessage = "";
     [ObservableProperty] private bool _hasActiveFilters;
@@ -136,12 +127,18 @@ public sealed partial class SearchFiltersViewModel : ViewModelBase
 
     public bool IsCustomDate => SelectedDatePreset.Value == DatePreset.Custom;
 
+    /// <summary>Suppresses per-change callbacks while a bulk update (Select all / none / Clear) runs,
+    /// so the owner sees a single coalesced rerun rather than one per checkbox.</summary>
+    private bool _suppressRaise;
+
     /// <summary>Raised whenever any filter changes; the owner should rerun its (debounced) search.</summary>
     public event Action? CriteriaChanged;
 
     public SearchFiltersViewModel()
     {
         Categories = FileCategories.All.Select(c => new FileCategoryViewModel(c, RaiseCriteriaChanged)).ToList();
+        // Everything on by default: a plain query shows all matches, and the user narrows from there.
+        foreach (var category in Categories) category.SetAll(true);
     }
 
     /// <summary>Builds the criteria for one search run, refreshing validation and the active-filter summary.</summary>
@@ -149,9 +146,21 @@ public sealed partial class SearchFiltersViewModel : ViewModelBase
     {
         var messages = new List<string>();
 
-        var extensions = Categories.SelectMany(c => c.SelectedExtensions).ToList();
-        foreach (var ext in FilterInputParser.ParseExtensions(CustomExtensionsText))
-            if (!extensions.Contains(ext)) extensions.Add(ext);
+        // Every category checked = "all files" (null, includes uncategorized extensions too). Otherwise the
+        // checked categories plus any custom extensions form an allowlist — which may be empty, meaning no
+        // files match at all.
+        IReadOnlyCollection<string>? extensions;
+        if (Categories.All(c => c.IsChecked == true))
+        {
+            extensions = null;
+        }
+        else
+        {
+            var selected = Categories.SelectMany(c => c.SelectedExtensions).ToList();
+            foreach (var ext in FilterInputParser.ParseExtensions(CustomExtensionsText))
+                if (!selected.Contains(ext)) selected.Add(ext);
+            extensions = selected;
+        }
 
         long? min = null, max = null;
         if (FilterInputParser.TryParseSize(MinSizeText, MinSizeUnit, out var minBytes, out var minInvalid)) min = minBytes;
@@ -167,45 +176,67 @@ public sealed partial class SearchFiltersViewModel : ViewModelBase
 
         var criteria = new SearchCriteria(
             query,
-            extensions.Count > 0 ? extensions : null,
+            extensions,
             min, max, afterUtc, beforeUtc,
-            SelectedKind.Value);
+            IncludeFolders);
 
         UpdateSummary(criteria);
         return criteria;
     }
 
+    /// <summary>Checks every file type and folders — the non-restrictive default.</summary>
+    [RelayCommand]
+    private void SelectAll() => SetAllTypes(true);
+
+    /// <summary>Unchecks every file type and folders, so nothing matches until the user picks a type.</summary>
+    [RelayCommand]
+    private void SelectNone() => SetAllTypes(false);
+
+    private void SetAllTypes(bool on)
+    {
+        _suppressRaise = true;
+        foreach (var category in Categories) category.SetAll(on);
+        IncludeFolders = on;
+        _suppressRaise = false;
+        RaiseCriteriaChanged();
+    }
+
     [RelayCommand]
     private void ClearFilters()
     {
-        foreach (var category in Categories) category.Reset();
+        _suppressRaise = true;
+        foreach (var category in Categories) category.SetAll(true);
+        IncludeFolders = true;
         CustomExtensionsText = "";
         MinSizeText = "";
         MaxSizeText = "";
         SelectedDatePreset = DatePresetOptions[0];
         CustomFromDate = null;
         CustomToDate = null;
-        SelectedKind = KindOptions[0];
         ValidationMessage = "";
-        // Category resets suppress their callbacks and properties already at defaults raise nothing,
-        // so fire one explicit change; any raises above coalesce into it via the owner's debounce.
+        _suppressRaise = false;
+        // Everything above was suppressed; fire one change so the owner reruns the (debounced) search.
         RaiseCriteriaChanged();
     }
 
     private void UpdateSummary(SearchCriteria criteria)
     {
         var active = 0;
-        if (criteria.Extensions is { Count: > 0 }) active++;
+        if (criteria.Extensions is not null || !criteria.IncludeFolders) active++; // type allowlist / folders
         if (criteria.MinSizeBytes.HasValue || criteria.MaxSizeBytes.HasValue) active++;
         if (criteria.ModifiedAfterUtc.HasValue || criteria.ModifiedBeforeUtc.HasValue) active++;
-        if (criteria.Kind != NodeKindFilter.All) active++;
 
         HasActiveFilters = active > 0;
         ActiveSummary = active == 0 ? "" : $"{active} filter(s) active";
     }
 
-    private void RaiseCriteriaChanged() => CriteriaChanged?.Invoke();
+    private void RaiseCriteriaChanged()
+    {
+        if (_suppressRaise) return;
+        CriteriaChanged?.Invoke();
+    }
 
+    partial void OnIncludeFoldersChanged(bool value) => RaiseCriteriaChanged();
     partial void OnCustomExtensionsTextChanged(string value) => RaiseCriteriaChanged();
     partial void OnMinSizeTextChanged(string value) => RaiseCriteriaChanged();
     partial void OnMaxSizeTextChanged(string value) => RaiseCriteriaChanged();
@@ -213,7 +244,6 @@ public sealed partial class SearchFiltersViewModel : ViewModelBase
     partial void OnMaxSizeUnitChanged(SizeUnit value) => RaiseCriteriaChanged();
     partial void OnCustomFromDateChanged(DateTime? value) => RaiseCriteriaChanged();
     partial void OnCustomToDateChanged(DateTime? value) => RaiseCriteriaChanged();
-    partial void OnSelectedKindChanged(KindOption value) => RaiseCriteriaChanged();
 
     partial void OnSelectedDatePresetChanged(DatePresetOption value)
     {
