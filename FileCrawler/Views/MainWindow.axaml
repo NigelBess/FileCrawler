@@ -49,10 +49,12 @@
                                                VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding Status}" FontSize="11" Foreground="#3B82F6"
                                                VerticalAlignment="Center"/>
-                                    <Button Content="Refresh" FontSize="11" Padding="6,2"
+                                    <Button Content="⟳" FontSize="13" Padding="7,2"
+                                            ToolTip.Tip="Refresh"
                                             Click="OnRefreshFolder"
                                             IsEnabled="{Binding !IsBusy}"/>
-                                    <Button Content="Remove" FontSize="11" Padding="6,2"
+                                    <Button Content="🗑" FontSize="12" Padding="7,2"
+                                            ToolTip.Tip="Remove"
                                             Click="OnRemoveFolder"/>
                                 </StackPanel>
 
@@ -103,7 +105,8 @@
                       IsExpanded="{Binding Filters.IsExpanded}">
                 <Expander.Header>
                     <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBlock Text="Filters" FontWeight="SemiBold"/>
+                        <Path Data="M0,0 L14,0 L8.5,7 L8.5,13 L5.5,13 L5.5,7 Z" Fill="Gray"
+                              VerticalAlignment="Center" ToolTip.Tip="Filters"/>
                         <TextBlock Text="{Binding Filters.ActiveSummary}" Foreground="#3B82F6"
                                    FontSize="11" VerticalAlignment="Center"/>
                     </StackPanel>
@@ -180,8 +183,15 @@
                             <ComboBox ItemsSource="{x:Static vm:SearchFiltersViewModel.KindOptions}"
                                       SelectedItem="{Binding Filters.SelectedKind}"/>
                         </StackPanel>
-                        <Button Content="Clear filters" Command="{Binding Filters.ClearFiltersCommand}"
-                                IsEnabled="{Binding Filters.HasActiveFilters}"/>
+                        <Button Command="{Binding Filters.ClearFiltersCommand}"
+                                ToolTip.Tip="Clear filters"
+                                IsEnabled="{Binding Filters.HasActiveFilters}">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <Path Data="M0,0 L14,0 L8.5,7 L8.5,13 L5.5,13 L5.5,7 Z" Fill="Gray"
+                                      VerticalAlignment="Center"/>
+                                <TextBlock Text="✕" FontSize="11" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
                     </WrapPanel>
 
                     <TextBlock Text="{Binding Filters.ValidationMessage}" Foreground="#DC2626" FontSize="11"
