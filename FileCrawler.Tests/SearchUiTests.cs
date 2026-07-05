@@ -98,6 +98,36 @@ public class SearchUiTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task Blocking_a_subfolder_excludes_its_contents_and_unblocking_restores_them()
+    {
+        var (_, vm) = BuildUi();
+        await vm.AddFolderCommand.ExecuteAsync(null);
+
+        vm.SearchText = "report";
+        await Task.Delay(500);
+        Dispatcher.UIThread.RunJobs();
+        var result = vm.Results.Single(r => r.Name == "report.pdf");
+
+        // Block the subfolder the file lives in (…/Projects/2026); its contents should disappear.
+        await vm.BlockSubfolderCommand.ExecuteAsync(result);
+        await Task.Delay(500);
+        Dispatcher.UIThread.RunJobs();
+
+        // The block is nested under the watched folder that owns it.
+        var folder = vm.WatchedFolders.Single();
+        Assert.Contains(folder.BlockedSubfolders, b => b.Path.EndsWith("2026"));
+        Assert.DoesNotContain(vm.Results, r => r.Name == "report.pdf");
+
+        // Unblocking recrawls and brings the file back.
+        await vm.UnblockSubfolderCommand.ExecuteAsync(folder.BlockedSubfolders.Single());
+        await Task.Delay(500);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Empty(folder.BlockedSubfolders);
+        Assert.Contains(vm.Results, r => r.Name == "report.pdf");
+    }
+
+    [AvaloniaFact]
     public async Task Extension_filter_narrows_results_and_clear_restores_them()
     {
         var (window, vm) = BuildUi();
@@ -143,8 +173,9 @@ public class SearchUiTests : IDisposable
     /// <summary>No-op persistence so tests don't touch %LOCALAPPDATA%.</summary>
     private sealed class NoopStore : IWatchedFolderStore
     {
-        public Task<System.Collections.Generic.IReadOnlyList<string>> LoadAsync() =>
-            Task.FromResult<System.Collections.Generic.IReadOnlyList<string>>(Array.Empty<string>());
-        public Task SaveAsync(System.Collections.Generic.IEnumerable<string> folders) => Task.CompletedTask;
+        public Task<WatchedFolderState> LoadAsync() => Task.FromResult(WatchedFolderState.Empty);
+        public Task SaveAsync(
+            System.Collections.Generic.IEnumerable<string> folders,
+            System.Collections.Generic.IEnumerable<string> blocked) => Task.CompletedTask;
     }
 }

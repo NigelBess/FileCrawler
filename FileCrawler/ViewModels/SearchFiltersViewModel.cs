@@ -129,7 +129,7 @@ public sealed partial class SearchFiltersViewModel : ViewModelBase
     [ObservableProperty] private DateTime? _customFromDate;
     [ObservableProperty] private DateTime? _customToDate;
     [ObservableProperty] private KindOption _selectedKind = KindOptions[0];
-    [ObservableProperty] private bool _isExpanded;
+    [ObservableProperty] private bool _isExpanded = true;
     [ObservableProperty] private string _validationMessage = "";
     [ObservableProperty] private bool _hasActiveFilters;
     [ObservableProperty] private string _activeSummary = "";

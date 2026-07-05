@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using FileCrawler.Models;
 using FileCrawler.Utilities;
@@ -19,6 +20,9 @@ public sealed partial class WatchedFolderViewModel : ObservableObject
 
     /// <summary>Normalized absolute path of the watched root (stable identity across recrawls).</summary>
     public string Path { get; }
+
+    /// <summary>Subfolders under this root whose contents are excluded from crawling (shown nested, in red).</summary>
+    public ObservableCollection<BlockedFolderViewModel> BlockedSubfolders { get; } = new();
 
     public string DisplayName => System.IO.Path.GetFileName(Path) is { Length: > 0 } name ? name : Path;
 

@@ -8,7 +8,8 @@ using System.Threading.Tasks;
 namespace FileCrawler.Services;
 
 /// <summary>The persisted shape of the watched-folder list (versioned for forward-compat).</summary>
-public sealed record WatchedFoldersFile(int Version, IReadOnlyList<string> Folders);
+/// <remarks><see cref="Blocked"/> was added in version 2; version-1 files load it as null (treated as empty).</remarks>
+public sealed record WatchedFoldersFile(int Version, IReadOnlyList<string> Folders, IReadOnlyList<string>? Blocked);
 
 [JsonSourceGenerationOptions(WriteIndented = true)]
 [JsonSerializable(typeof(WatchedFoldersFile))]
@@ -20,7 +21,7 @@ internal partial class WatchedFoldersJsonContext : JsonSerializerContext { }
 /// </summary>
 public sealed class WatchedFolderStore : IWatchedFolderStore
 {
-    private const int CurrentVersion = 1;
+    private const int CurrentVersion = 2;
     private readonly string _dir;
     private readonly string _path;
 
@@ -32,26 +33,29 @@ public sealed class WatchedFolderStore : IWatchedFolderStore
         _path = Path.Combine(_dir, "watched-folders.json");
     }
 
-    public async Task<IReadOnlyList<string>> LoadAsync()
+    public async Task<WatchedFolderState> LoadAsync()
     {
         try
         {
-            if (!File.Exists(_path)) return Array.Empty<string>();
+            if (!File.Exists(_path)) return WatchedFolderState.Empty;
             await using var stream = File.OpenRead(_path);
             var data = await JsonSerializer.DeserializeAsync(stream, WatchedFoldersJsonContext.Default.WatchedFoldersFile)
                 .ConfigureAwait(false);
-            return data?.Folders ?? Array.Empty<string>();
+            if (data is null) return WatchedFolderState.Empty;
+            return new WatchedFolderState(
+                data.Folders ?? Array.Empty<string>(),
+                data.Blocked ?? Array.Empty<string>());
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
-            return Array.Empty<string>();
+            return WatchedFolderState.Empty;
         }
     }
 
-    public async Task SaveAsync(IEnumerable<string> folders)
+    public async Task SaveAsync(IEnumerable<string> folders, IEnumerable<string> blocked)
     {
         Directory.CreateDirectory(_dir);
-        var data = new WatchedFoldersFile(CurrentVersion, new List<string>(folders));
+        var data = new WatchedFoldersFile(CurrentVersion, new List<string>(folders), new List<string>(blocked));
         var tmp = _path + ".tmp";
         await using (var stream = File.Create(tmp))
         {

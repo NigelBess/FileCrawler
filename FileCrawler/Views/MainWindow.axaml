@@ -15,10 +15,12 @@
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
-    <Grid ColumnDefinitions="300,*">
+    <Grid ColumnDefinitions="Auto,*">
 
-        <!-- Left: watched folders -->
-        <DockPanel Grid.Column="0" Background="{DynamicResource SystemControlBackgroundListLowBrush}">
+        <!-- Left: watched folders (collapsible, collapsed by default) -->
+        <DockPanel Grid.Column="0" Width="300"
+                   IsVisible="{Binding IsSidebarExpanded}"
+                   Background="{DynamicResource SystemControlBackgroundListLowBrush}">
             <StackPanel DockPanel.Dock="Top" Margin="12,12,12,6" Spacing="8">
                 <TextBlock Text="Watched Folders" FontWeight="SemiBold" FontSize="15"/>
                 <Button Content="＋ Add folder…" HorizontalAlignment="Stretch"
@@ -53,6 +55,30 @@
                                     <Button Content="Remove" FontSize="11" Padding="6,2"
                                             Click="OnRemoveFolder"/>
                                 </StackPanel>
+
+                                <!-- Blocked subfolders nested under their watched folder, in red -->
+                                <ItemsControl ItemsSource="{Binding BlockedSubfolders}"
+                                              Margin="10,4,0,0"
+                                              IsVisible="{Binding BlockedSubfolders.Count}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:BlockedFolderViewModel">
+                                            <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,1">
+                                                <TextBlock Grid.Column="0" Text="🚫" FontSize="10"
+                                                           Foreground="#DC2626" VerticalAlignment="Center"
+                                                           Margin="0,0,4,0"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding DisplayName}"
+                                                           FontSize="11" Foreground="#DC2626"
+                                                           VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTip.Tip="{Binding Path}"/>
+                                                <Button Grid.Column="2" Content="✕" FontSize="10" Padding="6,0"
+                                                        Background="Transparent" Foreground="#DC2626"
+                                                        ToolTip.Tip="Stop blocking this subfolder"
+                                                        Click="OnUnblockFolder"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
                             </StackPanel>
                         </Border>
                     </DataTemplate>
@@ -62,8 +88,15 @@
 
         <!-- Right: search + results -->
         <DockPanel Grid.Column="1" Margin="12">
-            <TextBox DockPanel.Dock="Top" PlaceholderText="Search files and folders…"
-                     FontSize="16" Text="{Binding SearchText}"/>
+            <DockPanel DockPanel.Dock="Top">
+                <ToggleButton DockPanel.Dock="Left" Margin="0,0,8,0" Padding="10,6"
+                              VerticalAlignment="Stretch"
+                              IsChecked="{Binding IsSidebarExpanded}"
+                              ToolTip.Tip="Toggle watched folders"
+                              Content="☰"/>
+                <TextBox PlaceholderText="Search files and folders…"
+                         FontSize="16" Text="{Binding SearchText}"/>
+            </DockPanel>
 
             <Expander DockPanel.Dock="Top" Margin="0,8,0,0" MinHeight="0"
                       HorizontalAlignment="Stretch"
@@ -175,6 +208,9 @@
                                 <ContextMenu>
                                     <MenuItem Header="Open" Click="OnOpenResult"/>
                                     <MenuItem Header="Reveal in Explorer" Click="OnRevealResult"/>
+                                    <Separator/>
+                                    <MenuItem Header="Never include results from this subfolder"
+                                              Click="OnBlockSubfolder"/>
                                 </ContextMenu>
                             </Grid.ContextMenu>
                             <Panel Grid.Column="0" Width="32" Margin="0,0,8,0" VerticalAlignment="Center"

@@ -23,12 +23,19 @@ public sealed class DirectoryCrawler : IDirectoryCrawler
         AttributesToSkip = 0, // include hidden/system entries
     };
 
+    private static readonly IReadOnlySet<string> NoBlocked = new HashSet<string>();
+
     /// <summary>Lightweight projection of a directory entry; avoids per-file FileInfo allocations.</summary>
     private readonly record struct Entry(string Name, long Size, DateTime ModifiedUtc, bool IsDirectory, bool IsReparse);
 
-    public async Task<CrawlResult> CrawlAsync(string rootPath, IProgress<CrawlProgress>? progress, CancellationToken ct)
+    public async Task<CrawlResult> CrawlAsync(
+        string rootPath,
+        IReadOnlySet<string>? blockedFolders,
+        IProgress<CrawlProgress>? progress,
+        CancellationToken ct)
     {
         rootPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(rootPath));
+        var blocked = blockedFolders ?? NoBlocked;
 
         DateTime rootModified;
         try { rootModified = Directory.GetLastWriteTimeUtc(rootPath); }
@@ -46,7 +53,7 @@ public sealed class DirectoryCrawler : IDirectoryCrawler
             ModifiedUtc = rootModified,
         };
 
-        await Task.Run(() => CrawlDirectory(root, rootPath, rootPath, progress, ref skipped, ref nodeCount, parallelize: true, ct), ct)
+        await Task.Run(() => CrawlDirectory(root, rootPath, rootPath, blocked, progress, ref skipped, ref nodeCount, parallelize: true, ct), ct)
             .ConfigureAwait(false);
 
         var all = Flatten(root);
@@ -62,6 +69,7 @@ public sealed class DirectoryCrawler : IDirectoryCrawler
         FileNode dir,
         string dirPath,
         string rootPath,
+        IReadOnlySet<string> blocked,
         IProgress<CrawlProgress>? progress,
         ref int skipped,
         ref int nodeCount,
@@ -88,6 +96,11 @@ public sealed class DirectoryCrawler : IDirectoryCrawler
 
             foreach (var entry in enumerable)
             {
+                // Blocked subfolders are excluded entirely: skip the directory and its whole subtree so
+                // neither it nor its contents ever reach the search index or size totals.
+                if (entry.IsDirectory && blocked.Count > 0 && blocked.Contains(Path.Combine(dirPath, entry.Name)))
+                    continue;
+
                 var node = new FileNode
                 {
                     Name = entry.Name,
@@ -135,7 +148,7 @@ public sealed class DirectoryCrawler : IDirectoryCrawler
                     i =>
                     {
                         var sub = subDirs[i];
-                        CrawlDirectory(sub, Path.Combine(dirPath, sub.Name), rootPath, progress,
+                        CrawlDirectory(sub, Path.Combine(dirPath, sub.Name), rootPath, blocked, progress,
                             ref localSkipped, ref localCount, parallelize: false, ct);
                         partials[i] = sub.SizeBytes;
                     });
@@ -147,7 +160,7 @@ public sealed class DirectoryCrawler : IDirectoryCrawler
             {
                 foreach (var sub in subDirs)
                 {
-                    CrawlDirectory(sub, Path.Combine(dirPath, sub.Name), rootPath, progress,
+                    CrawlDirectory(sub, Path.Combine(dirPath, sub.Name), rootPath, blocked, progress,
                         ref skipped, ref nodeCount, parallelize: false, ct);
                     childrenSize += sub.SizeBytes;
                 }
