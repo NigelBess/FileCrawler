@@ -128,6 +128,35 @@ public class SearchUiTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task Blocked_summary_shows_for_a_real_search_but_hides_when_filters_match_nothing()
+    {
+        var (_, vm) = BuildUi();
+        await vm.AddFolderCommand.ExecuteAsync(null);
+
+        // Block …/Projects/2026 (holds report.pdf) so the index has blocked content to report on.
+        vm.SearchText = "report";
+        await Task.Delay(500);
+        Dispatcher.UIThread.RunJobs();
+        await vm.BlockSubfolderCommand.ExecuteAsync(vm.Results.Single(r => r.Name == "report.pdf"));
+        await Task.Delay(500);
+        Dispatcher.UIThread.RunJobs();
+
+        // A query that matches a non-blocked item surfaces the blocked-coverage caveat.
+        vm.SearchText = "list";
+        await Task.Delay(500);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(vm.Results, r => r.Name == "list.txt");
+        Assert.NotEqual("", vm.BlockedSummary);
+
+        // "Select none" excludes every type and folders, so nothing can match — the caveat is pure noise here.
+        vm.Filters.SelectNoneCommand.Execute(null);
+        await Task.Delay(500);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(vm.Results);
+        Assert.Equal("", vm.BlockedSummary);
+    }
+
+    [AvaloniaFact]
     public async Task Extension_filter_narrows_results_and_clear_restores_them()
     {
         var (window, vm) = BuildUi();

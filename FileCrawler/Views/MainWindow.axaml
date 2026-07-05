@@ -257,7 +257,9 @@
                      DoubleTapped="OnResultDoubleTapped">
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:SearchResultViewModel">
-                        <Grid ColumnDefinitions="Auto,2*,3*,Auto,Auto" Height="40">
+                        <!-- Background="Transparent" so the whole row is hit-testable for the right-click;
+                             a Grid with no background ignores clicks on its empty areas. -->
+                        <Grid ColumnDefinitions="Auto,2*,3*,Auto,Auto" Height="40" Background="Transparent">
                             <Grid.ContextMenu>
                                 <ContextMenu>
                                     <MenuItem Header="Open" Click="OnOpenResult"/>

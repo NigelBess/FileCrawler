@@ -37,4 +37,11 @@ public sealed record SearchCriteria(
 
     /// <summary>True when there is nothing to search by at all.</summary>
     public bool IsEmpty => string.IsNullOrWhiteSpace(Query) && !HasFilters;
+
+    /// <summary>
+    /// True when the filters exclude every possible node — no file types are allowed <em>and</em> folders are
+    /// hidden — so the search returns nothing regardless of the query (e.g. "Select none"). Distinct from a
+    /// query that merely happens to have no matches.
+    /// </summary>
+    public bool MatchesNothing => Extensions is { Count: 0 } && !IncludeFolders;
 }

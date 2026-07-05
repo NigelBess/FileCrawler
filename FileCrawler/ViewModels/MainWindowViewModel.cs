@@ -115,13 +115,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                         ? $"{results.Items.Count:N0} filtered item(s)."
                         : $"{results.Items.Count:N0} result(s).";
 
-            // Only meaningful when a search is showing results; blocked content is hidden regardless of query.
+            // A coverage caveat, not a match count: blocked folders are never crawled, so this total isn't
+            // filtered by the query. Suppress it when nothing is being searched (empty criteria) or when the
+            // filters exclude everything anyway ("Select none") — there it's pure noise.
             var blocked = _index.BlockedItems;
-            BlockedSummary = criteria.IsEmpty || blocked == 0
+            BlockedSummary = criteria.IsEmpty || criteria.MatchesNothing || blocked == 0
                 ? ""
                 : _index.BlockedItemsCapped
-                    ? $"Over {blocked:N0} more items in blocked folders aren’t shown."
-                    : $"{blocked:N0} item(s) in blocked folders aren’t shown.";
+                    ? $"Over {blocked:N0} items in blocked folders aren’t searched."
+                    : $"{blocked:N0} item(s) in blocked folders aren’t searched.";
         }
         catch (OperationCanceledException)
         {
