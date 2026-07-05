@@ -265,7 +265,7 @@
                                     <MenuItem Header="Open" Click="OnOpenResult"/>
                                     <MenuItem Header="Reveal in Explorer" Click="OnRevealResult"/>
                                     <Separator/>
-                                    <MenuItem Header="Never include results from this subfolder"
+                                    <MenuItem Header="Block subfolder…"
                                               Click="OnBlockSubfolder"/>
                                 </ContextMenu>
                             </Grid.ContextMenu>

@@ -21,6 +21,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IWatchedFolderStore _store;
     private readonly ISearchService _search;
     private readonly IFolderPicker _picker;
+    private readonly ISubfolderBlockPicker _blockPicker;
 
     private CancellationTokenSource? _searchCts;
     private CancellationTokenSource? _resultsCts;
@@ -44,6 +45,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _store = new WatchedFolderStore();
         _search = new SearchService(_index);
         _picker = new StorageFolderPicker(() => null);
+        _blockPicker = new DialogSubfolderBlockPicker(() => null);
         Filters.CriteriaChanged += RerunSearch;
     }
 
@@ -52,13 +54,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IFileIndex index,
         IWatchedFolderStore store,
         ISearchService search,
-        IFolderPicker picker)
+        IFolderPicker picker,
+        ISubfolderBlockPicker blockPicker)
     {
         _crawler = crawler;
         _index = index;
         _store = store;
         _search = search;
         _picker = picker;
+        _blockPicker = blockPicker;
         Filters.CriteriaChanged += RerunSearch;
     }
 
@@ -199,9 +203,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Blocks the subfolder that <paramref name="result"/> lives in (its parent directory for a file, or the
-    /// folder itself for a directory) so its contents are never included, then recrawls the owning root. The
-    /// block is nested under the watched folder that contains it.
+    /// Prompts the user to pick which folder level to block for <paramref name="result"/> — one choice per
+    /// level of the hierarchy between the owning watched root and the folder the result lives in (its parent
+    /// directory for a file, or the folder itself for a directory) — then blocks it and recrawls the owner.
     /// </summary>
     [RelayCommand]
     private async Task BlockSubfolderAsync(SearchResultViewModel? result)
@@ -213,22 +217,27 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             : System.IO.Path.GetDirectoryName(result.FullPath);
         if (string.IsNullOrEmpty(target)) return;
 
-        var blockPath = WatchedFolderNesting.Normalize(target);
+        var targetPath = WatchedFolderNesting.Normalize(target);
 
         var owner = WatchedFolders.FirstOrDefault(
-            w => WatchedFolderNesting.IsSameOrDescendant(blockPath, w.Path));
+            w => WatchedFolderNesting.IsSameOrDescendant(targetPath, w.Path));
         if (owner is null)
         {
-            StatusText = $"“{blockPath}” is not inside any watched folder.";
+            StatusText = $"“{targetPath}” is not inside any watched folder.";
             return;
         }
 
-        // Blocking a watched root would empty it out silently; direct the user to remove it instead.
-        if (string.Equals(owner.Path, blockPath, StringComparison.OrdinalIgnoreCase))
+        // Each folder level between the watched root (exclusive) and the result's folder (inclusive) is a
+        // block candidate. Empty when the result sits directly in the root — nothing below it to block.
+        var levels = WatchedFolderNesting.LevelsBetween(targetPath, owner.Path);
+        if (levels.Count == 0)
         {
-            StatusText = $"“{blockPath}” is a watched folder — use Remove instead of blocking.";
+            StatusText = $"“{targetPath}” is a watched folder — use Remove instead of blocking.";
             return;
         }
+
+        var blockPath = await _blockPicker.PickAsync(levels);
+        if (string.IsNullOrEmpty(blockPath)) return;
 
         await AddBlockAsync(owner, blockPath);
     }

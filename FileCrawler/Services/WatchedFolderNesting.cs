@@ -25,6 +25,28 @@ public static class WatchedFolderNesting
         return child.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Returns each folder level between <paramref name="owner"/> (exclusive) and <paramref name="target"/>
+    /// (inclusive), ordered shallowest-first. These are the candidate folders a user can choose to block for a
+    /// result found under <paramref name="owner"/>. Empty when <paramref name="target"/> is the owner itself or
+    /// not nested under it. All inputs and outputs are normalized.
+    /// </summary>
+    public static IReadOnlyList<string> LevelsBetween(string target, string owner)
+    {
+        var levels = new List<string>();
+        var current = target;
+        while (IsSameOrDescendant(current, owner) &&
+               !string.Equals(current, owner, StringComparison.OrdinalIgnoreCase))
+        {
+            levels.Add(current);
+            var parent = Path.GetDirectoryName(current);
+            if (string.IsNullOrEmpty(parent)) break;
+            current = Normalize(parent);
+        }
+        levels.Reverse();
+        return levels;
+    }
+
     /// <summary>The outcome of resolving a candidate folder against the existing watched roots.</summary>
     /// <param name="CanAdd">Whether the candidate should be added.</param>
     /// <param name="CoveredBy">If it cannot be added, the existing root that already covers it.</param>

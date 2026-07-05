@@ -26,8 +26,9 @@ namespace FileCrawler
                 var store = new WatchedFolderStore();
                 var search = new SearchService(index);
                 var picker = new StorageFolderPicker(() => window);
+                var blockPicker = new DialogSubfolderBlockPicker(() => window);
 
-                var viewModel = new MainWindowViewModel(crawler, index, store, search, picker);
+                var viewModel = new MainWindowViewModel(crawler, index, store, search, picker, blockPicker);
                 window.DataContext = viewModel;
                 desktop.MainWindow = window;
 

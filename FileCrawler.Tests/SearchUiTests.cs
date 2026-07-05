@@ -21,6 +21,13 @@ internal sealed class FakeFolderPicker : IFolderPicker
     public Task<string?> PickFolderAsync() => Task.FromResult<string?>(_path);
 }
 
+/// <summary>A block picker that auto-selects the deepest offered level (no dialog) for tests.</summary>
+internal sealed class FakeSubfolderBlockPicker : ISubfolderBlockPicker
+{
+    public Task<string?> PickAsync(System.Collections.Generic.IReadOnlyList<string> candidatePaths) =>
+        Task.FromResult<string?>(candidatePaths.Count > 0 ? candidatePaths[^1] : null);
+}
+
 public class SearchUiTests : IDisposable
 {
     private readonly string _tree;
@@ -44,7 +51,7 @@ public class SearchUiTests : IDisposable
         var index = new FileIndex();
         var vm = new MainWindowViewModel(
             new DirectoryCrawler(), index, new NoopStore(),
-            new SearchService(index), new FakeFolderPicker(_tree));
+            new SearchService(index), new FakeFolderPicker(_tree), new FakeSubfolderBlockPicker());
         var window = new MainWindow { DataContext = vm };
         window.Show();
         return (window, vm);

@@ -1,0 +1,29 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        x:Class="FileCrawler.Views.BlockSubfolderDialog"
+        Icon="/Assets/app-icon.ico"
+        Width="420" SizeToContent="Height"
+        MaxHeight="520"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Title="Block subfolder">
+
+    <DockPanel Margin="16">
+
+        <TextBlock DockPanel.Dock="Top" Margin="0,0,0,4"
+                   Text="Block a subfolder" FontWeight="SemiBold" FontSize="15"/>
+        <TextBlock DockPanel.Dock="Top" Margin="0,0,0,12"
+                   Foreground="Gray" TextWrapping="Wrap"
+                   Text="Choose which folder level to exclude from results. Contents of the chosen folder will never be included."/>
+
+        <Button DockPanel.Dock="Bottom" Margin="0,12,0,0"
+                HorizontalAlignment="Right"
+                Content="Cancel" Click="OnCancel"/>
+
+        <ScrollViewer>
+            <StackPanel x:Name="LevelsPanel" Spacing="6"/>
+        </ScrollViewer>
+
+    </DockPanel>
+</Window>
