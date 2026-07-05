@@ -280,11 +280,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         try
         {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             var result = await _crawler.CrawlAsync(path, ToSet(blocked), null, CancellationToken.None);
+            sw.Stop();
             _index.AddRoot(result);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var vm = new WatchedFolderViewModel(path, result.Root);
+                var vm = new WatchedFolderViewModel(path, result.Root)
+                {
+                    // AllNodes includes the root itself, which isn't a "file or subfolder".
+                    ItemCount = Math.Max(0, result.AllNodes.Count - 1),
+                    LoadTime = sw.Elapsed,
+                };
                 foreach (var b in blocked) vm.BlockedSubfolders.Add(new BlockedFolderViewModel(b));
                 WatchedFolders.Add(vm);
             });
@@ -303,9 +310,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         try
         {
             var blocked = ToSet(folder.BlockedSubfolders.Select(b => b.Path));
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             var result = await _crawler.CrawlAsync(folder.Path, blocked, null, CancellationToken.None);
+            sw.Stop();
             _index.ReplaceRoot(folder.Root, result);
             folder.Root = result.Root;
+            folder.ItemCount = Math.Max(0, result.AllNodes.Count - 1);
+            folder.LoadTime = sw.Elapsed;
             folder.Status = "";
             return true;
         }
