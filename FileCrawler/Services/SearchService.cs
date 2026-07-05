@@ -15,8 +15,9 @@ namespace FileCrawler.Services;
 /// filters are cheap scalar checks and run before name matching to prune the expensive matcher. The scan
 /// runs off the UI thread, is cancellable per item, and stops once the result cap is reached — both the
 /// filter and <see cref="UserSearchHelpers.FindAllMatches"/> compose lazily, so capping the consumer here
-/// is enough to keep it responsive over millions of nodes. An empty query with active filters returns all
-/// filter matches ("browse mode"); an entirely empty criteria returns nothing.
+/// is enough to keep it responsive over millions of nodes. An empty query matches everything; with active
+/// filters that is "browse mode" (all filter matches), and with no filters it dumps the whole index up to
+/// the result cap.
 /// </summary>
 public sealed class SearchService : ISearchService
 {
@@ -29,8 +30,6 @@ public sealed class SearchService : ISearchService
 
     public Task<SearchResults> SearchAsync(SearchCriteria criteria, CancellationToken ct) => Task.Run(() =>
     {
-        if (criteria.IsEmpty) return SearchResults.Empty;
-
         var snapshot = _index.AllNodes;
         var filter = NodeFilter.Create(criteria);
         var candidates = filter is null ? snapshot : snapshot.Where(filter.Matches);

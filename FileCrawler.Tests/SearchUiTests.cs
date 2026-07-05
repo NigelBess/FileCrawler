@@ -50,7 +50,7 @@ public class SearchUiTests : IDisposable
     {
         var index = new FileIndex();
         var vm = new MainWindowViewModel(
-            new DirectoryCrawler(), index, new NoopStore(),
+            new DirectoryCrawler(), index, new NoopStore(), new NoopSearchStateStore(),
             new SearchService(index), new FakeFolderPicker(_tree), new FakeSubfolderBlockPicker());
         var window = new MainWindow { DataContext = vm };
         window.Show();
@@ -92,7 +92,7 @@ public class SearchUiTests : IDisposable
     }
 
     [AvaloniaFact]
-    public async Task Empty_query_shows_no_results()
+    public async Task Empty_query_dumps_the_index()
     {
         var (_, vm) = BuildUi();
         await vm.AddFolderCommand.ExecuteAsync(null);
@@ -101,7 +101,7 @@ public class SearchUiTests : IDisposable
         await Task.Delay(500);
         Dispatcher.UIThread.RunJobs();
 
-        Assert.Empty(vm.Results);
+        Assert.NotEmpty(vm.Results);
     }
 
     [AvaloniaFact]
@@ -217,5 +217,12 @@ public class SearchUiTests : IDisposable
         public Task SaveAsync(
             System.Collections.Generic.IEnumerable<string> folders,
             System.Collections.Generic.IEnumerable<string> blocked) => Task.CompletedTask;
+    }
+
+    /// <summary>No-op search-state persistence so tests don't touch %LOCALAPPDATA%.</summary>
+    private sealed class NoopSearchStateStore : ISearchStateStore
+    {
+        public Task<SearchState?> LoadAsync() => Task.FromResult<SearchState?>(null);
+        public Task SaveAsync(SearchState state) => Task.CompletedTask;
     }
 }

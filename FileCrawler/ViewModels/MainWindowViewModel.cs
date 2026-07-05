@@ -12,6 +12,9 @@ using FileCrawler.Services;
 
 namespace FileCrawler.ViewModels;
 
+/// <summary>The result column the list is ordered by.</summary>
+public enum ResultSortColumn { Name, Path, Extension, Size, Modified }
+
 public sealed partial class MainWindowViewModel : ViewModelBase
 {
     private const int SearchDebounceMs = 200;
@@ -34,9 +37,37 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _blockedSummary = "";
     [ObservableProperty] private bool _isSidebarExpanded;
 
+    [ObservableProperty] private ResultSortColumn _sortColumn = ResultSortColumn.Name;
+    [ObservableProperty] private bool _sortDescending;
+
     public ObservableCollection<WatchedFolderViewModel> WatchedFolders { get; } = new();
     public ObservableCollection<SearchResultViewModel> Results { get; } = new();
     public SearchFiltersViewModel Filters { get; } = new();
+
+    // --- Sortable column headers ---
+
+    // Header captions carry an arrow for the active sort column so the list header doubles as the indicator.
+    public string NameHeader => "Name" + Indicator(ResultSortColumn.Name);
+    public string PathHeader => "Path" + Indicator(ResultSortColumn.Path);
+    public string SizeHeader => "Size" + Indicator(ResultSortColumn.Size);
+    public string ModifiedHeader => "Modified" + Indicator(ResultSortColumn.Modified);
+    // The type/extension sort lives on the narrow icon column, so it shows just the arrow (no caption).
+    public string ExtensionIndicator => SortColumn == ResultSortColumn.Extension ? Arrow() : "";
+
+    private string Indicator(ResultSortColumn column) => SortColumn == column ? " " + Arrow() : "";
+    private string Arrow() => SortDescending ? "▾" : "▴";
+
+    partial void OnSortColumnChanged(ResultSortColumn value) => RaiseHeaderChanges();
+    partial void OnSortDescendingChanged(bool value) => RaiseHeaderChanges();
+
+    private void RaiseHeaderChanges()
+    {
+        OnPropertyChanged(nameof(NameHeader));
+        OnPropertyChanged(nameof(PathHeader));
+        OnPropertyChanged(nameof(SizeHeader));
+        OnPropertyChanged(nameof(ModifiedHeader));
+        OnPropertyChanged(nameof(ExtensionIndicator));
+    }
 
     /// <summary>Design-time constructor (also used by the XAML previewer).</summary>
     public MainWindowViewModel()
@@ -129,21 +160,22 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             var lifetime = _resultsCts.Token;
 
             Results.Clear();
-            foreach (var node in results.Items) Results.Add(new SearchResultViewModel(node, lifetime));
+            var rows = results.Items.Select(node => new SearchResultViewModel(node, lifetime));
+            foreach (var row in SortRows(rows)) Results.Add(row);
 
-            ResultsSummary = criteria.IsEmpty
-                ? ""
-                : results.Capped
-                    ? $"Showing first {results.Items.Count:N0} of many — refine your search."
-                    : string.IsNullOrWhiteSpace(query)
+            ResultsSummary = results.Capped
+                ? $"Showing first {results.Items.Count:N0} of many — refine your search."
+                : string.IsNullOrWhiteSpace(query)
+                    ? criteria.HasFilters
                         ? $"{results.Items.Count:N0} filtered item(s)."
-                        : $"{results.Items.Count:N0} result(s).";
+                        : $"{results.Items.Count:N0} item(s)."
+                    : $"{results.Items.Count:N0} result(s).";
 
             // A coverage caveat, not a match count: blocked folders are never crawled, so this total isn't
-            // filtered by the query. Suppress it when nothing is being searched (empty criteria) or when the
-            // filters exclude everything anyway ("Select none") — there it's pure noise.
+            // filtered by the query. Suppress it when the filters exclude everything anyway ("Select none") —
+            // there it's pure noise.
             var blocked = _index.BlockedItems;
-            BlockedSummary = criteria.IsEmpty || criteria.MatchesNothing || blocked == 0
+            BlockedSummary = criteria.MatchesNothing || blocked == 0
                 ? ""
                 : _index.BlockedItemsCapped
                     ? $"Over {blocked:N0} items in blocked folders aren’t searched."
@@ -316,6 +348,47 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         if (result is not null) FileLauncher.RevealInExplorer(result.FullPath);
     }
+
+    /// <summary>
+    /// Sorts the results by <paramref name="column"/>. Clicking the active column again flips the direction;
+    /// clicking a new column starts ascending. Re-sorts the current rows in place — no re-search — so cached
+    /// thumbnails survive.
+    /// </summary>
+    [RelayCommand]
+    private void SortBy(string column)
+    {
+        if (!Enum.TryParse<ResultSortColumn>(column, out var target)) return;
+
+        if (target == SortColumn)
+        {
+            SortDescending = !SortDescending;
+        }
+        else
+        {
+            SortColumn = target;
+            SortDescending = false;
+        }
+
+        var sorted = SortRows(Results.ToList()).ToList();
+        Results.Clear();
+        foreach (var row in sorted) Results.Add(row);
+    }
+
+    private IEnumerable<SearchResultViewModel> SortRows(IEnumerable<SearchResultViewModel> rows) =>
+        SortColumn switch
+        {
+            ResultSortColumn.Name => Order(rows, r => r.Node.Name, StringComparer.OrdinalIgnoreCase),
+            ResultSortColumn.Path => Order(rows, r => r.FullPath, StringComparer.OrdinalIgnoreCase),
+            ResultSortColumn.Extension =>
+                Order(rows, r => System.IO.Path.GetExtension(r.Node.Name), StringComparer.OrdinalIgnoreCase),
+            ResultSortColumn.Size => Order(rows, r => r.Node.SizeBytes),
+            ResultSortColumn.Modified => Order(rows, r => r.Node.ModifiedUtc),
+            _ => rows,
+        };
+
+    private IEnumerable<SearchResultViewModel> Order<TKey>(
+        IEnumerable<SearchResultViewModel> rows, Func<SearchResultViewModel, TKey> key, IComparer<TKey>? comparer = null) =>
+        SortDescending ? rows.OrderByDescending(key, comparer) : rows.OrderBy(key, comparer);
 
     // --- Helpers ---
 

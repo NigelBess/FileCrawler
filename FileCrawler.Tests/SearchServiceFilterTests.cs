@@ -104,15 +104,15 @@ public class SearchServiceFilterTests
     }
 
     [Fact]
-    public async Task Empty_query_with_filters_returns_matches_but_without_filters_returns_nothing()
+    public async Task Empty_query_matches_everything_with_or_without_filters()
     {
-        FileNode[] nodes = [File("a.txt")];
+        FileNode[] nodes = [File("a.txt"), File("b.log")];
 
         var browse = await SearchAsync(new SearchCriteria("", Extensions: [".txt"]), nodes);
-        var empty = await SearchAsync(new SearchCriteria(""), nodes);
+        var all = await SearchAsync(new SearchCriteria(""), nodes);
 
-        Assert.Single(browse.Items);
-        Assert.Empty(empty.Items);
+        Assert.Equal(["a.txt"], browse.Items.Select(n => n.Name));
+        Assert.Equal(["a.txt", "b.log"], all.Items.Select(n => n.Name));
     }
 
     [Fact]

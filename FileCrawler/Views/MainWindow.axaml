@@ -253,8 +253,66 @@
             <SelectableTextBlock DockPanel.Dock="Bottom" Text="{Binding StatusText}" Foreground="Gray"
                        FontSize="11" Margin="2,8,2,0" TextWrapping="Wrap"/>
 
+            <!-- Sortable column headers. Column widths mirror the row template below (Auto,2*,3*,Auto,Auto
+                 with the icon/size/modified columns pinned to 32/80/130) so captions line up over their data.
+                 Clicking a header sorts by that column; clicking it again flips the direction. -->
+            <Border DockPanel.Dock="Top" Padding="8,0" Margin="0,4,0,2"
+                    BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                    BorderThickness="0,0,0,1">
+                <Border.Styles>
+                    <Style Selector="Button.colHeader">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Setter Property="Padding" Value="2,4"/>
+                        <Setter Property="FontSize" Value="12"/>
+                        <Setter Property="FontWeight" Value="SemiBold"/>
+                        <Setter Property="Foreground" Value="Gray"/>
+                        <Setter Property="VerticalAlignment" Value="Center"/>
+                        <Setter Property="Cursor" Value="Hand"/>
+                    </Style>
+                    <Style Selector="Button.colHeader:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                        <Setter Property="Background" Value="{DynamicResource SystemControlBackgroundListLowBrush}"/>
+                    </Style>
+                </Border.Styles>
+                <Grid ColumnDefinitions="Auto,2*,3*,Auto,Auto">
+                    <Button Grid.Column="0" Width="32" Margin="0,0,8,0" Classes="colHeader"
+                            HorizontalContentAlignment="Center"
+                            Command="{Binding SortByCommand}" CommandParameter="Extension"
+                            ToolTip.Tip="Sort by file type / extension">
+                        <StackPanel Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
+                            <mi:MaterialIcon Kind="SortAlphabeticalVariant" Width="14" Height="14"/>
+                            <TextBlock Text="{Binding ExtensionIndicator}" FontSize="11"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Grid.Column="1" Classes="colHeader"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                            Command="{Binding SortByCommand}" CommandParameter="Name"
+                            Content="{Binding NameHeader}"/>
+                    <Button Grid.Column="2" Classes="colHeader"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                            Command="{Binding SortByCommand}" CommandParameter="Path"
+                            Content="{Binding PathHeader}"/>
+                    <Button Grid.Column="3" Width="80" Classes="colHeader"
+                            HorizontalContentAlignment="Right"
+                            Command="{Binding SortByCommand}" CommandParameter="Size"
+                            Content="{Binding SizeHeader}"/>
+                    <Button Grid.Column="4" Width="130" Classes="colHeader"
+                            HorizontalContentAlignment="Right"
+                            Command="{Binding SortByCommand}" CommandParameter="Modified"
+                            Content="{Binding ModifiedHeader}"/>
+                </Grid>
+            </Border>
+
             <ListBox x:Name="ResultsList" ItemsSource="{Binding Results}"
                      DoubleTapped="OnResultDoubleTapped">
+                <ListBox.Styles>
+                    <!-- Zero the item's horizontal padding and match the header's 8px inset so the row grid
+                         starts at the same x as the header grid. -->
+                    <Style Selector="ListBoxItem">
+                        <Setter Property="Padding" Value="8,0"/>
+                        <Setter Property="MinHeight" Value="0"/>
+                    </Style>
+                </ListBox.Styles>
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:SearchResultViewModel">
                         <!-- Background="Transparent" so the whole row is hit-testable for the right-click;
