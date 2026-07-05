@@ -65,6 +65,7 @@ public sealed class SearchService : ISearchService
         private readonly long? _maxSize;
         private readonly DateTime? _afterUtc;
         private readonly DateTime? _beforeUtc;
+        private readonly string[]? _blockedPaths;    // per-search folder exclusions; null when none
 
         public static NodeFilter? Create(SearchCriteria c) => c.HasFilters ? new NodeFilter(c) : null;
 
@@ -90,6 +91,7 @@ public sealed class SearchService : ISearchService
             _maxSize = c.MaxSizeBytes;
             _afterUtc = c.ModifiedAfterUtc;
             _beforeUtc = c.ModifiedBeforeUtc;
+            _blockedPaths = c.BlockedPaths is { Count: > 0 } b ? b.ToArray() : null;
         }
 
         public bool Matches(FileNode node)
@@ -112,6 +114,16 @@ public sealed class SearchService : ISearchService
             if (_maxSize.HasValue && node.SizeBytes > _maxSize.Value) return false;
             if (_afterUtc.HasValue && node.ModifiedUtc < _afterUtc.Value) return false;
             if (_beforeUtc.HasValue && node.ModifiedUtc >= _beforeUtc.Value) return false;
+
+            // Per-search folder exclusions: drop anything at or below a blocked path. The full path is only
+            // reconstructed (a parent-chain walk) when this feature is actually in use, and after the cheap
+            // scalar checks above have already pruned most nodes.
+            if (_blockedPaths is not null)
+            {
+                var path = node.FullPath;
+                foreach (var blocked in _blockedPaths)
+                    if (WatchedFolderNesting.IsSameOrDescendant(path, blocked)) return false;
+            }
 
             return true;
         }

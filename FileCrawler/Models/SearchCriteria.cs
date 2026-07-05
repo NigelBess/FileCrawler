@@ -17,6 +17,11 @@ namespace FileCrawler.Models;
 /// <param name="ModifiedAfterUtc">Inclusive lower bound on last write time (UTC).</param>
 /// <param name="ModifiedBeforeUtc">Exclusive upper bound on last write time (UTC).</param>
 /// <param name="IncludeFolders">Whether folders may appear in results; independent of the extension allowlist.</param>
+/// <param name="BlockedPaths">
+/// Folders (normalized absolute paths) excluded from this search only — the folder and everything under it is
+/// dropped at search time, without recrawling. Distinct from a watched-folder block, which is never indexed at
+/// all. <c>null</c> or empty means no per-search exclusions.
+/// </param>
 public sealed record SearchCriteria(
     string Query,
     IReadOnlyCollection<string>? Extensions = null,
@@ -24,7 +29,8 @@ public sealed record SearchCriteria(
     long? MaxSizeBytes = null,
     DateTime? ModifiedAfterUtc = null,
     DateTime? ModifiedBeforeUtc = null,
-    bool IncludeFolders = true)
+    bool IncludeFolders = true,
+    IReadOnlyCollection<string>? BlockedPaths = null)
 {
     /// <summary>True when any structured filter (beyond the text query) is active.</summary>
     public bool HasFilters =>
@@ -33,7 +39,8 @@ public sealed record SearchCriteria(
         || MinSizeBytes.HasValue
         || MaxSizeBytes.HasValue
         || ModifiedAfterUtc.HasValue
-        || ModifiedBeforeUtc.HasValue;
+        || ModifiedBeforeUtc.HasValue
+        || BlockedPaths is { Count: > 0 };
 
     /// <summary>True when there is nothing to search by at all.</summary>
     public bool IsEmpty => string.IsNullOrWhiteSpace(Query) && !HasFilters;

@@ -57,16 +57,28 @@ namespace FileCrawler.Views
                 ViewModel?.RevealResultCommand.Execute(result);
         }
 
-        private void OnBlockSubfolder(object? sender, RoutedEventArgs e)
+        private void OnBlockSubfolderThisSearch(object? sender, RoutedEventArgs e)
         {
             if ((sender as Control)?.DataContext is SearchResultViewModel result)
-                ViewModel?.BlockSubfolderCommand.Execute(result);
+                ViewModel?.BlockSubfolderFromThisSearchCommand.Execute(result);
+        }
+
+        private void OnBlockSubfolderAllSearches(object? sender, RoutedEventArgs e)
+        {
+            if ((sender as Control)?.DataContext is SearchResultViewModel result)
+                ViewModel?.BlockSubfolderFromAllSearchesCommand.Execute(result);
         }
 
         private void OnUnblockFolder(object? sender, RoutedEventArgs e)
         {
             if ((sender as Control)?.DataContext is BlockedFolderViewModel blocked)
                 ViewModel?.UnblockSubfolderCommand.Execute(blocked);
+        }
+
+        private void OnRemoveSearchBlock(object? sender, RoutedEventArgs e)
+        {
+            if ((sender as Control)?.DataContext is BlockedFolderViewModel blocked)
+                ViewModel?.Filters.RemoveSearchBlockCommand.Execute(blocked);
         }
     }
 }

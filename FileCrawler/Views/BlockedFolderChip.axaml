@@ -1,0 +1,28 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:vm="using:FileCrawler.ViewModels"
+             x:Class="FileCrawler.Views.BlockedFolderChip"
+             x:DataType="vm:BlockedFolderViewModel">
+
+    <!-- A blocked-folder "chip": red-bordered pill with the folder name and an X to remove it. Shared by the
+         search-filter list ("Blocked from this search") and the watched-folders sidebar. Removal bubbles up as
+         RemoveRequested so each host can wire it to its own command. -->
+    <Border BorderBrush="#DC2626" BorderThickness="1" CornerRadius="4"
+            Padding="6,1,2,1" Background="Transparent">
+        <StackPanel Orientation="Horizontal" Spacing="4">
+            <mi:MaterialIcon Kind="Octagon" Width="13" Height="13"
+                             Foreground="#DC2626" VerticalAlignment="Center"/>
+            <SelectableTextBlock Text="{Binding DisplayName}"
+                       FontSize="11" Foreground="#DC2626" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Path}"/>
+            <Button Padding="4,0" Background="Transparent" BorderThickness="0"
+                    Foreground="#DC2626" VerticalAlignment="Center"
+                    ToolTip.Tip="Stop blocking this folder"
+                    Click="OnRemoveClick">
+                <mi:MaterialIcon Kind="Close" Width="13" Height="13"/>
+            </Button>
+        </StackPanel>
+    </Border>
+
+</UserControl>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -124,6 +125,11 @@ public sealed partial class SearchFiltersViewModel : ViewModelBase
 
     public IReadOnlyList<FileCategoryViewModel> Categories { get; }
 
+    /// <summary>Folders excluded from this search only (via "Block subfolder → from this search"). Shown at the
+    /// bottom of the filter bar, each removable with its own X; unlike a watched-folder block these never
+    /// recrawl — they're applied at search time and cleared without touching the index.</summary>
+    public ObservableCollection<BlockedFolderViewModel> SearchBlockedFolders { get; } = new();
+
     [ObservableProperty] private bool _includeFolders = true;
     [ObservableProperty] private string _customExtensionsText = "";
     [ObservableProperty] private string _minSizeText = "";
@@ -152,6 +158,34 @@ public sealed partial class SearchFiltersViewModel : ViewModelBase
         Categories = FileCategories.All.Select(c => new FileCategoryViewModel(c, RaiseCriteriaChanged)).ToList();
         // Everything on by default: a plain query shows all matches, and the user narrows from there.
         foreach (var category in Categories) category.SetAll(true);
+    }
+
+    /// <summary>
+    /// Excludes <paramref name="path"/> (and its contents) from this search only. Nested/duplicate paths are
+    /// coalesced the same way watched-folder blocks are — a broader block supersedes the ones inside it — then
+    /// reruns the search. Does not recrawl; the folder stays indexed and comes back when the block is removed.
+    /// </summary>
+    public void AddSearchBlock(string path)
+    {
+        var existing = SearchBlockedFolders.Select(b => b.Path).ToList();
+        var resolution = WatchedFolderNesting.Resolve(path, existing);
+        if (!resolution.CanAdd) return;
+
+        foreach (var superseded in resolution.Superseded)
+        {
+            var vm = SearchBlockedFolders.FirstOrDefault(b => b.Path == superseded);
+            if (vm is not null) SearchBlockedFolders.Remove(vm);
+        }
+        SearchBlockedFolders.Add(new BlockedFolderViewModel(path));
+        RaiseCriteriaChanged();
+    }
+
+    /// <summary>Removes a per-search folder block (the X next to it) and reruns the search.</summary>
+    [RelayCommand]
+    private void RemoveSearchBlock(BlockedFolderViewModel? blocked)
+    {
+        if (blocked is null) return;
+        if (SearchBlockedFolders.Remove(blocked)) RaiseCriteriaChanged();
     }
 
     /// <summary>Builds the criteria for one search run, refreshing validation and the active-filter summary.</summary>
@@ -187,11 +221,16 @@ public sealed partial class SearchFiltersViewModel : ViewModelBase
 
         ValidationMessage = string.Join(" ", messages);
 
+        var blockedPaths = SearchBlockedFolders.Count == 0
+            ? null
+            : SearchBlockedFolders.Select(b => b.Path).ToList();
+
         var criteria = new SearchCriteria(
             query,
             extensions,
             min, max, afterUtc, beforeUtc,
-            IncludeFolders);
+            IncludeFolders,
+            blockedPaths);
 
         UpdateSummary(criteria);
         return criteria;
@@ -208,7 +247,8 @@ public sealed partial class SearchFiltersViewModel : ViewModelBase
         MaxSizeUnit,
         SelectedDatePreset.Value,
         CustomFromDate,
-        CustomToDate);
+        CustomToDate,
+        SearchBlockedFolders.Select(b => b.Path).ToList());
 
     /// <summary>Restores previously persisted filter selections without triggering a search — the owner
     /// runs one search itself once restoration (and any folder crawl) is complete.</summary>
@@ -227,6 +267,9 @@ public sealed partial class SearchFiltersViewModel : ViewModelBase
             DatePresetOptions.FirstOrDefault(o => o.Value == state.DatePreset) ?? DatePresetOptions[0];
         CustomFromDate = state.CustomFromDate;
         CustomToDate = state.CustomToDate;
+        SearchBlockedFolders.Clear();
+        if (state.BlockedPaths is not null)
+            foreach (var path in state.BlockedPaths) SearchBlockedFolders.Add(new BlockedFolderViewModel(path));
         _suppressRaise = false;
     }
 
@@ -259,6 +302,7 @@ public sealed partial class SearchFiltersViewModel : ViewModelBase
         SelectedDatePreset = DatePresetOptions[0];
         CustomFromDate = null;
         CustomToDate = null;
+        SearchBlockedFolders.Clear();
         ValidationMessage = "";
         _suppressRaise = false;
         // Everything above was suppressed; fire one change so the owner reruns the (debounced) search.
@@ -271,6 +315,7 @@ public sealed partial class SearchFiltersViewModel : ViewModelBase
         if (criteria.Extensions is not null || !criteria.IncludeFolders) active++; // type allowlist / folders
         if (criteria.MinSizeBytes.HasValue || criteria.MaxSizeBytes.HasValue) active++;
         if (criteria.ModifiedAfterUtc.HasValue || criteria.ModifiedBeforeUtc.HasValue) active++;
+        if (criteria.BlockedPaths is { Count: > 0 }) active++; // per-search folder blocks
 
         HasActiveFilters = active > 0;
         ActiveSummary = active == 0 ? "" : $"{active} filter(s) active";

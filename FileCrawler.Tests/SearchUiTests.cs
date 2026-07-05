@@ -116,7 +116,7 @@ public class SearchUiTests : IDisposable
         var result = vm.Results.Single(r => r.Name == "report.pdf");
 
         // Block the subfolder the file lives in (…/Projects/2026); its contents should disappear.
-        await vm.BlockSubfolderCommand.ExecuteAsync(result);
+        await vm.BlockSubfolderFromAllSearchesCommand.ExecuteAsync(result);
         await Task.Delay(500);
         Dispatcher.UIThread.RunJobs();
 
@@ -135,6 +135,36 @@ public class SearchUiTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task Blocking_a_subfolder_from_this_search_filters_it_without_recrawling_and_the_x_restores_it()
+    {
+        var (_, vm) = BuildUi();
+        await vm.AddFolderCommand.ExecuteAsync(null);
+
+        vm.SearchText = "report";
+        await Task.Delay(500);
+        Dispatcher.UIThread.RunJobs();
+        var result = vm.Results.Single(r => r.Name == "report.pdf");
+
+        // Block …/Projects/2026 from this search only: the file disappears from results, but the folder is NOT
+        // removed from the index (no watched-folder block was added) and the block shows up in the filter bar.
+        await vm.BlockSubfolderFromThisSearchCommand.ExecuteAsync(result);
+        await Task.Delay(500);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Empty(vm.WatchedFolders.Single().BlockedSubfolders);       // no permanent (recrawl) block
+        Assert.Contains(vm.Filters.SearchBlockedFolders, b => b.Path.EndsWith("2026"));
+        Assert.DoesNotContain(vm.Results, r => r.Name == "report.pdf");
+
+        // Removing the per-search block (its X) brings the file back with no recrawl.
+        vm.Filters.RemoveSearchBlockCommand.Execute(vm.Filters.SearchBlockedFolders.Single());
+        await Task.Delay(500);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Empty(vm.Filters.SearchBlockedFolders);
+        Assert.Contains(vm.Results, r => r.Name == "report.pdf");
+    }
+
+    [AvaloniaFact]
     public async Task Blocked_summary_shows_for_a_real_search_but_hides_when_filters_match_nothing()
     {
         var (_, vm) = BuildUi();
@@ -144,7 +174,7 @@ public class SearchUiTests : IDisposable
         vm.SearchText = "report";
         await Task.Delay(500);
         Dispatcher.UIThread.RunJobs();
-        await vm.BlockSubfolderCommand.ExecuteAsync(vm.Results.Single(r => r.Name == "report.pdf"));
+        await vm.BlockSubfolderFromAllSearchesCommand.ExecuteAsync(vm.Results.Single(r => r.Name == "report.pdf"));
         await Task.Delay(500);
         Dispatcher.UIThread.RunJobs();
 

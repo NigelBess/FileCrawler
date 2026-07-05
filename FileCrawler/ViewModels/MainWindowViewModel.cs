@@ -259,19 +259,46 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Prompts the user to pick which folder level to block for <paramref name="result"/> — one choice per
-    /// level of the hierarchy between the owning watched root and the folder the result lives in (its parent
-    /// directory for a file, or the folder itself for a directory) — then blocks it and recrawls the owner.
+    /// Blocks a subfolder of <paramref name="result"/> from <em>every</em> search: adds a permanent watched-folder
+    /// block and recrawls so the folder is never indexed. Prompts for which folder level to block first.
     /// </summary>
     [RelayCommand]
-    private async Task BlockSubfolderAsync(SearchResultViewModel? result)
+    private async Task BlockSubfolderFromAllSearchesAsync(SearchResultViewModel? result)
     {
-        if (result is null) return;
+        var (owner, blockPath) = await PickBlockLevelAsync(result);
+        if (owner is null || blockPath is null) return;
+        await AddBlockAsync(owner, blockPath);
+    }
+
+    /// <summary>
+    /// Blocks a subfolder of <paramref name="result"/> from <em>this</em> search only: adds a per-search filter
+    /// that excludes the folder at search time (no recrawl; removable via its X in the filter bar). Prompts for
+    /// which folder level to block first, using the same dialog as the all-searches block.
+    /// </summary>
+    [RelayCommand]
+    private async Task BlockSubfolderFromThisSearchAsync(SearchResultViewModel? result)
+    {
+        var (_, blockPath) = await PickBlockLevelAsync(result);
+        if (blockPath is null) return;
+        Filters.AddSearchBlock(blockPath);
+        StatusText = $"Blocked “{blockPath}” from this search.";
+    }
+
+    /// <summary>
+    /// Prompts the user to pick which folder level to block for <paramref name="result"/> — one choice per level
+    /// of the hierarchy between the owning watched root and the folder the result lives in (its parent directory
+    /// for a file, or the folder itself for a directory). Returns the owning watched folder and the chosen path,
+    /// or a null <c>blockPath</c> if the result can't be blocked or the user cancels. Reports why via StatusText.
+    /// </summary>
+    private async Task<(WatchedFolderViewModel? owner, string? blockPath)> PickBlockLevelAsync(
+        SearchResultViewModel? result)
+    {
+        if (result is null) return (null, null);
 
         var target = result.IsDirectory
             ? result.FullPath
             : System.IO.Path.GetDirectoryName(result.FullPath);
-        if (string.IsNullOrEmpty(target)) return;
+        if (string.IsNullOrEmpty(target)) return (null, null);
 
         var targetPath = WatchedFolderNesting.Normalize(target);
 
@@ -280,7 +307,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (owner is null)
         {
             StatusText = $"“{targetPath}” is not inside any watched folder.";
-            return;
+            return (null, null);
         }
 
         // Each folder level between the watched root (exclusive) and the result's folder (inclusive) is a
@@ -289,13 +316,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (levels.Count == 0)
         {
             StatusText = $"“{targetPath}” is a watched folder — use Remove instead of blocking.";
-            return;
+            return (owner, null);
         }
 
         var blockPath = await _blockPicker.PickAsync(levels);
-        if (string.IsNullOrEmpty(blockPath)) return;
-
-        await AddBlockAsync(owner, blockPath);
+        return string.IsNullOrEmpty(blockPath) ? (owner, null) : (owner, blockPath);
     }
 
     /// <summary>Prompts for a subfolder of <paramref name="owner"/> and blocks it from results.</summary>

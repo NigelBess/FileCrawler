@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:FileCrawler.ViewModels"
+        xmlns:views="using:FileCrawler.Views"
         xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -83,23 +84,8 @@
                                               IsVisible="{Binding BlockedSubfolders.Count}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:BlockedFolderViewModel">
-                                            <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,1">
-                                                <mi:MaterialIcon Grid.Column="0" Kind="Octagon"
-                                                                 Width="13" Height="13"
-                                                                 Foreground="#DC2626" VerticalAlignment="Center"
-                                                                 Margin="0,0,4,0"/>
-                                                <SelectableTextBlock Grid.Column="1" Text="{Binding DisplayName}"
-                                                           FontSize="11" Foreground="#DC2626"
-                                                           VerticalAlignment="Center"
-                                                           TextTrimming="CharacterEllipsis"
-                                                           ToolTip.Tip="{Binding Path}"/>
-                                                <Button Grid.Column="2" Padding="6,0"
-                                                        Background="Transparent" Foreground="#DC2626"
-                                                        ToolTip.Tip="Stop blocking this subfolder"
-                                                        Click="OnUnblockFolder">
-                                                    <mi:MaterialIcon Kind="TrashCanOutline" Width="13" Height="13"/>
-                                                </Button>
-                                            </Grid>
+                                            <views:BlockedFolderChip Margin="0,1" HorizontalAlignment="Left"
+                                                                     RemoveRequested="OnUnblockFolder"/>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
@@ -235,6 +221,20 @@
 
                     <SelectableTextBlock Text="{Binding Filters.ValidationMessage}" Foreground="#DC2626" FontSize="11"
                                IsVisible="{Binding Filters.ValidationMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+                    <!-- Folders blocked from this search only (right-click a result → Block subfolder → From this
+                         search). Each is removable with its own X; unlike watched-folder blocks these never recrawl. -->
+                    <StackPanel Spacing="4" IsVisible="{Binding Filters.SearchBlockedFolders.Count}">
+                        <SelectableTextBlock Text="Blocked from this search:" FontSize="11" Foreground="Gray"/>
+                        <ItemsControl ItemsSource="{Binding Filters.SearchBlockedFolders}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:BlockedFolderViewModel">
+                                    <views:BlockedFolderChip Margin="0,1" HorizontalAlignment="Left"
+                                                             RemoveRequested="OnRemoveSearchBlock"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
                 </StackPanel>
             </Expander>
 
@@ -323,8 +323,12 @@
                                     <MenuItem Header="Open" Click="OnOpenResult"/>
                                     <MenuItem Header="Reveal in Explorer" Click="OnRevealResult"/>
                                     <Separator/>
-                                    <MenuItem Header="Block subfolder…"
-                                              Click="OnBlockSubfolder"/>
+                                    <MenuItem Header="Block subfolder">
+                                        <MenuItem Header="From this search…"
+                                                  Click="OnBlockSubfolderThisSearch"/>
+                                        <MenuItem Header="From all searches…"
+                                                  Click="OnBlockSubfolderAllSearches"/>
+                                    </MenuItem>
                                 </ContextMenu>
                             </Grid.ContextMenu>
                             <Panel Grid.Column="0" Width="40" Margin="0,0,8,0" VerticalAlignment="Center"

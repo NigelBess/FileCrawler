@@ -16,7 +16,8 @@ public sealed record FilterState(
     SizeUnit MaxSizeUnit,
     DatePreset DatePreset,
     DateTime? CustomFromDate,
-    DateTime? CustomToDate);
+    DateTime? CustomToDate,
+    IReadOnlyList<string>? BlockedPaths = null);
 
 /// <summary>The last search term and filter selections, restored on the next launch.</summary>
 public sealed record SearchState(string SearchText, FilterState Filters);
