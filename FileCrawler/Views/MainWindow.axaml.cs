@@ -17,10 +17,10 @@ namespace FileCrawler.Views
 
         private MainWindowViewModel? ViewModel => DataContext as MainWindowViewModel;
 
-        private void OnRefreshFolder(object? sender, RoutedEventArgs e)
+        private void OnAddBlockedFolder(object? sender, RoutedEventArgs e)
         {
             if ((sender as Control)?.DataContext is WatchedFolderViewModel folder)
-                ViewModel?.RefreshFolderCommand.Execute(folder);
+                ViewModel?.AddBlockedSubfolderCommand.Execute(folder);
         }
 
         private void OnRemoveFolder(object? sender, RoutedEventArgs e)

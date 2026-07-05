@@ -174,14 +174,17 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task RefreshFolderAsync(WatchedFolderViewModel? folder)
+    private async Task RefreshAllAsync()
     {
-        if (folder is null) return;
-        if (await RecrawlFolderAsync(folder))
-        {
-            StatusText = $"Refreshed “{folder.Path}”.";
-            RerunSearch();
-        }
+        if (WatchedFolders.Count == 0) return;
+
+        IsBusy = true;
+        StatusText = $"Refreshing {WatchedFolders.Count} folder(s)…";
+        await Task.WhenAll(WatchedFolders.ToList().Select(RecrawlFolderAsync));
+        IsBusy = false;
+
+        StatusText = $"Ready — {_index.AllNodes.Count:N0} items indexed across {WatchedFolders.Count} folder(s).";
+        RerunSearch();
     }
 
     /// <summary>
@@ -216,24 +219,33 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        var existing = owner.BlockedSubfolders.Select(b => b.Path).ToList();
-        var resolution = WatchedFolderNesting.Resolve(blockPath, existing);
-        if (!resolution.CanAdd)
+        await AddBlockAsync(owner, blockPath);
+    }
+
+    /// <summary>Prompts for a subfolder of <paramref name="owner"/> and blocks it from results.</summary>
+    [RelayCommand]
+    private async Task AddBlockedSubfolderAsync(WatchedFolderViewModel? owner)
+    {
+        if (owner is null) return;
+
+        var picked = await _picker.PickFolderAsync();
+        if (string.IsNullOrWhiteSpace(picked)) return;
+
+        var blockPath = WatchedFolderNesting.Normalize(picked);
+
+        if (string.Equals(owner.Path, blockPath, StringComparison.OrdinalIgnoreCase))
         {
-            StatusText = $"“{blockPath}” is already blocked (covered by “{resolution.CoveredBy}”).";
+            StatusText = $"“{blockPath}” is a watched folder — use Remove instead of blocking.";
             return;
         }
 
-        // Drop any already-blocked subfolders now covered by this (broader) block.
-        foreach (var superseded in resolution.Superseded)
+        if (!WatchedFolderNesting.IsSameOrDescendant(blockPath, owner.Path))
         {
-            var vm = owner.BlockedSubfolders.FirstOrDefault(b => b.Path == superseded);
-            if (vm is not null) owner.BlockedSubfolders.Remove(vm);
+            StatusText = $"“{blockPath}” is not inside “{owner.Path}”.";
+            return;
         }
-        owner.BlockedSubfolders.Add(new BlockedFolderViewModel(blockPath));
 
-        await ApplyBlockChangeAsync(owner);
-        StatusText = $"Blocked “{blockPath}”.";
+        await AddBlockAsync(owner, blockPath);
     }
 
     [RelayCommand]
@@ -307,6 +319,32 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         {
             folder.IsBusy = false;
         }
+    }
+
+    /// <summary>
+    /// Adds <paramref name="blockPath"/> as a block under <paramref name="owner"/> (deduping nested blocks),
+    /// then recrawls and persists. Assumes <paramref name="blockPath"/> is a subfolder of the owner, not the root.
+    /// </summary>
+    private async Task AddBlockAsync(WatchedFolderViewModel owner, string blockPath)
+    {
+        var existing = owner.BlockedSubfolders.Select(b => b.Path).ToList();
+        var resolution = WatchedFolderNesting.Resolve(blockPath, existing);
+        if (!resolution.CanAdd)
+        {
+            StatusText = $"“{blockPath}” is already blocked (covered by “{resolution.CoveredBy}”).";
+            return;
+        }
+
+        // Drop any already-blocked subfolders now covered by this (broader) block.
+        foreach (var superseded in resolution.Superseded)
+        {
+            var vm = owner.BlockedSubfolders.FirstOrDefault(b => b.Path == superseded);
+            if (vm is not null) owner.BlockedSubfolders.Remove(vm);
+        }
+        owner.BlockedSubfolders.Add(new BlockedFolderViewModel(blockPath));
+
+        await ApplyBlockChangeAsync(owner);
+        StatusText = $"Blocked “{blockPath}”.";
     }
 
     /// <summary>Recrawls <paramref name="folder"/> after its block set changed, persists, and re-searches.</summary>
