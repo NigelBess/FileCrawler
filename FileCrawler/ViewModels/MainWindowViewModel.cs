@@ -19,6 +19,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IDirectoryCrawler _crawler;
     private readonly IFileIndex _index;
     private readonly IWatchedFolderStore _store;
+    private readonly ISearchStateStore _searchStateStore;
     private readonly ISearchService _search;
     private readonly IFolderPicker _picker;
     private readonly ISubfolderBlockPicker _blockPicker;
@@ -43,6 +44,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _crawler = new DirectoryCrawler();
         _index = new FileIndex();
         _store = new WatchedFolderStore();
+        _searchStateStore = new SearchStateStore();
         _search = new SearchService(_index);
         _picker = new StorageFolderPicker(() => null);
         _blockPicker = new DialogSubfolderBlockPicker(() => null);
@@ -53,6 +55,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IDirectoryCrawler crawler,
         IFileIndex index,
         IWatchedFolderStore store,
+        ISearchStateStore searchStateStore,
         ISearchService search,
         IFolderPicker picker,
         ISubfolderBlockPicker blockPicker)
@@ -60,6 +63,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _crawler = crawler;
         _index = index;
         _store = store;
+        _searchStateStore = searchStateStore;
         _search = search;
         _picker = picker;
         _blockPicker = blockPicker;
@@ -69,20 +73,36 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// <summary>Loads persisted watched folders and crawls them concurrently. Call once after the window shows.</summary>
     public async Task InitializeAsync()
     {
+        // Restore the saved filters first (silently — no search yet), then crawl, then replay the search term
+        // last so the search runs against a populated index.
+        var searchState = await _searchStateStore.LoadAsync();
+        if (searchState is not null) Filters.RestoreState(searchState.Filters);
+
         var saved = await _store.LoadAsync();
-        if (saved.Folders.Count == 0) return;
+        if (saved.Folders.Count > 0)
+        {
+            IsBusy = true;
+            StatusText = $"Crawling {saved.Folders.Count} folder(s)…";
 
-        IsBusy = true;
-        StatusText = $"Crawling {saved.Folders.Count} folder(s)…";
+            // Assign each persisted block to the watched root that contains it.
+            await Task.WhenAll(saved.Folders.Select(path =>
+                CrawlAndAddAsync(path, BlocksUnder(path, saved.Blocked))));
 
-        // Assign each persisted block to the watched root that contains it.
-        await Task.WhenAll(saved.Folders.Select(path =>
-            CrawlAndAddAsync(path, BlocksUnder(path, saved.Blocked))));
+            IsBusy = false;
+            StatusText = WatchedFolders.Count == 0
+                ? "Add a folder to start searching."
+                : $"Ready — {_index.AllNodes.Count:N0} items indexed across {WatchedFolders.Count} folder(s).";
+        }
 
-        IsBusy = false;
-        StatusText = WatchedFolders.Count == 0
-            ? "Add a folder to start searching."
-            : $"Ready — {_index.AllNodes.Count:N0} items indexed across {WatchedFolders.Count} folder(s).";
+        // Replay the last search now that the index is ready. Setting a non-empty term triggers the search;
+        // for an empty term we rerun explicitly so restored filters still take effect.
+        if (searchState is not null)
+        {
+            if (!string.IsNullOrEmpty(searchState.SearchText))
+                SearchText = searchState.SearchText;
+            else
+                RerunSearch();
+        }
     }
 
     // --- Search (debounced) ---
@@ -128,6 +148,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 : _index.BlockedItemsCapped
                     ? $"Over {blocked:N0} items in blocked folders aren’t searched."
                     : $"{blocked:N0} item(s) in blocked folders aren’t searched.";
+
+            // The debounce already coalesced rapid keystrokes/filter clicks, so this is the last run — a good
+            // point to persist the term and filters (fire-and-forget; writing happens off the UI thread).
+            _ = _searchStateStore.SaveAsync(new SearchState(query, Filters.CaptureState()));
         }
         catch (OperationCanceledException)
         {

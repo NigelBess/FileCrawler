@@ -24,11 +24,13 @@ namespace FileCrawler
                 var crawler = new DirectoryCrawler();
                 var index = new FileIndex();
                 var store = new WatchedFolderStore();
+                var searchStateStore = new SearchStateStore();
                 var search = new SearchService(index);
                 var picker = new StorageFolderPicker(() => window);
                 var blockPicker = new DialogSubfolderBlockPicker(() => window);
 
-                var viewModel = new MainWindowViewModel(crawler, index, store, search, picker, blockPicker);
+                var viewModel = new MainWindowViewModel(
+                    crawler, index, store, searchStateStore, search, picker, blockPicker);
                 window.DataContext = viewModel;
                 desktop.MainWindow = window;
 

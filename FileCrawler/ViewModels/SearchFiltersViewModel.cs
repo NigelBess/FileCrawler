@@ -4,6 +4,7 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FileCrawler.Models;
+using FileCrawler.Services;
 using FileCrawler.Utilities;
 
 namespace FileCrawler.ViewModels;
@@ -61,6 +62,17 @@ public sealed partial class FileCategoryViewModel : ViewModelBase
         _updating = false;
     }
 
+    /// <summary>Selects exactly the extensions in <paramref name="selected"/> and recomputes the tri-state,
+    /// without raising the change callback (for restoring a persisted selection).</summary>
+    public void ApplySelection(IReadOnlySet<string> selected)
+    {
+        _updating = true;
+        foreach (var ext in Extensions) ext.IsSelected = selected.Contains(ext.Name);
+        var count = Extensions.Count(e => e.IsSelected);
+        IsChecked = count == 0 ? false : count == Extensions.Count ? true : null;
+        _updating = false;
+    }
+
     partial void OnIsCheckedChanged(bool? value)
     {
         if (_updating || value is not { } isOn) return;
@@ -92,8 +104,9 @@ public sealed record DatePresetOption(DatePreset Value, string Label)
 /// modified-date window. The type checkboxes are an allowlist — everything starts checked (so a bare query
 /// still shows all matches), and unchecking narrows results; unchecking every type matches nothing. Raises
 /// <see cref="CriteriaChanged"/> on every change; the owner reruns the (debounced) search and calls
-/// <see cref="BuildCriteria"/> at search time, so date presets are evaluated fresh each run. Filters are
-/// deliberately per-session — persisting them across restarts risks invisible sticky filters.
+/// <see cref="BuildCriteria"/> at search time, so date presets are evaluated fresh each run. The selections
+/// are persisted across restarts (see <see cref="CaptureState"/>/<see cref="RestoreState"/>) so the user's
+/// last search comes back on launch.
 /// </summary>
 public sealed partial class SearchFiltersViewModel : ViewModelBase
 {
@@ -182,6 +195,39 @@ public sealed partial class SearchFiltersViewModel : ViewModelBase
 
         UpdateSummary(criteria);
         return criteria;
+    }
+
+    /// <summary>Snapshots the current filter selections for persistence.</summary>
+    public FilterState CaptureState() => new(
+        Categories.SelectMany(c => c.SelectedExtensions).ToList(),
+        IncludeFolders,
+        CustomExtensionsText,
+        MinSizeText,
+        MaxSizeText,
+        MinSizeUnit,
+        MaxSizeUnit,
+        SelectedDatePreset.Value,
+        CustomFromDate,
+        CustomToDate);
+
+    /// <summary>Restores previously persisted filter selections without triggering a search — the owner
+    /// runs one search itself once restoration (and any folder crawl) is complete.</summary>
+    public void RestoreState(FilterState state)
+    {
+        _suppressRaise = true;
+        var selected = state.SelectedExtensions.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var category in Categories) category.ApplySelection(selected);
+        IncludeFolders = state.IncludeFolders;
+        CustomExtensionsText = state.CustomExtensionsText;
+        MinSizeText = state.MinSizeText;
+        MaxSizeText = state.MaxSizeText;
+        MinSizeUnit = state.MinSizeUnit;
+        MaxSizeUnit = state.MaxSizeUnit;
+        SelectedDatePreset =
+            DatePresetOptions.FirstOrDefault(o => o.Value == state.DatePreset) ?? DatePresetOptions[0];
+        CustomFromDate = state.CustomFromDate;
+        CustomToDate = state.CustomToDate;
+        _suppressRaise = false;
     }
 
     /// <summary>Checks every file type and folders — the non-restrictive default.</summary>
