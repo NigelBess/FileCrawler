@@ -61,6 +61,10 @@ public sealed class SearchResultViewModel : ObservableObject
     /// <summary>True for rows that get an enlarged mouse-over preview (decodable image files).</summary>
     public bool HasPreview => !IsDirectory && ThumbnailProvider.IsThumbnailable(Name);
 
+    /// <summary>Row icon box size: image thumbnails fill the row height so the picture is legible;
+    /// shell icons stay compact at their designed size.</summary>
+    public double ImageSize => HasPreview ? 40 : 32;
+
     /// <summary>
     /// The enlarged hover preview. Read only when the tooltip actually opens, which is what starts the
     /// decode — hovering is the trigger, so previews cost nothing until used. Falls back to the row

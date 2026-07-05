@@ -327,7 +327,7 @@
                                               Click="OnBlockSubfolder"/>
                                 </ContextMenu>
                             </Grid.ContextMenu>
-                            <Panel Grid.Column="0" Width="32" Margin="0,0,8,0" VerticalAlignment="Center"
+                            <Panel Grid.Column="0" Width="40" Margin="0,0,8,0" VerticalAlignment="Center"
                                    Background="Transparent"
                                    ToolTip.ServiceEnabled="{Binding HasPreview}"
                                    ToolTip.ShowDelay="300">
@@ -337,9 +337,14 @@
                                     <Image Source="{Binding Preview}" MaxWidth="256" MaxHeight="256"
                                            Stretch="Uniform"/>
                                 </ToolTip.Tip>
-                                <Image Width="32" Height="32" Source="{Binding Image}"
+                                <!-- Image thumbnails fill the row height (ImageSize=40); shell icons stay
+                                     compact (ImageSize=32) and centre in the fixed-width column. -->
+                                <Image Width="{Binding ImageSize}" Height="{Binding ImageSize}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Source="{Binding Image}"
                                        IsVisible="{Binding Image, Converter={x:Static ObjectConverters.IsNotNull}}"/>
                                 <SelectableTextBlock Text="{Binding Kind}" VerticalAlignment="Center"
+                                           HorizontalAlignment="Center"
                                            IsVisible="{Binding Image, Converter={x:Static ObjectConverters.IsNull}}"/>
                             </Panel>
                             <SelectableTextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center"

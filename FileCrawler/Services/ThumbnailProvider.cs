@@ -17,8 +17,8 @@ namespace FileCrawler.Services;
 /// </summary>
 public static class ThumbnailProvider
 {
-    /// <summary>Decode width in pixels — covers the 32px row slot at 2× DPI. ~16 KB decoded per entry.</summary>
-    public const int DecodeWidth = 64;
+    /// <summary>Decode width in pixels — covers the 40px row slot at 2× DPI. ~25 KB decoded per entry.</summary>
+    public const int DecodeWidth = 80;
 
     /// <summary>Decode width for the enlarged mouse-over preview. ~256 KB decoded per entry.</summary>
     public const int PreviewWidth = 256;
