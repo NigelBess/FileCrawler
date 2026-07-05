@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:FileCrawler.ViewModels"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="620"
@@ -24,16 +25,23 @@
             <Grid DockPanel.Dock="Top" Margin="12,12,12,6" ColumnDefinitions="*,Auto">
                 <TextBlock Grid.Column="0" Text="Watched Folders" FontWeight="SemiBold" FontSize="15"
                            VerticalAlignment="Center"/>
-                <Button Grid.Column="1" Content="⟳" FontSize="14" Padding="8,3"
+                <Button Grid.Column="1" Padding="6,4"
                         ToolTip.Tip="Refresh all folders"
                         Command="{Binding RefreshAllCommand}"
-                        IsEnabled="{Binding !IsBusy}"/>
+                        IsEnabled="{Binding !IsBusy}">
+                    <mi:MaterialIcon Kind="Refresh" Width="18" Height="18"/>
+                </Button>
             </Grid>
 
             <!-- Add folder pinned to the bottom of the list -->
-            <Button DockPanel.Dock="Bottom" Content="＋ Add folder…" Margin="12,6,12,12"
+            <Button DockPanel.Dock="Bottom" Margin="12,6,12,12"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                    Command="{Binding AddFolderCommand}"/>
+                    Command="{Binding AddFolderCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <mi:MaterialIcon Kind="FolderPlusOutline" Width="18" Height="18"/>
+                    <TextBlock Text="Add folder…" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
 
             <TextBlock DockPanel.Dock="Bottom" Margin="12,6,12,4" FontSize="11"
                        Foreground="Gray" TextWrapping="Wrap"
@@ -56,9 +64,11 @@
                                                VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding Status}" FontSize="11" Foreground="#3B82F6"
                                                VerticalAlignment="Center"/>
-                                    <Button Content="🗑" FontSize="12" Padding="7,2"
+                                    <Button Padding="6,2"
                                             ToolTip.Tip="Remove"
-                                            Click="OnRemoveFolder"/>
+                                            Click="OnRemoveFolder">
+                                        <mi:MaterialIcon Kind="TrashCanOutline" Width="15" Height="15"/>
+                                    </Button>
                                 </StackPanel>
 
                                 <!-- Blocked subfolders nested under their watched folder, in red -->
@@ -68,30 +78,40 @@
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:BlockedFolderViewModel">
                                             <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,1">
-                                                <TextBlock Grid.Column="0" Text="🚫" FontSize="10"
-                                                           Foreground="#DC2626" VerticalAlignment="Center"
-                                                           Margin="0,0,4,0"/>
+                                                <mi:MaterialIcon Grid.Column="0" Kind="CancelOutline"
+                                                                 Width="13" Height="13"
+                                                                 Foreground="#DC2626" VerticalAlignment="Center"
+                                                                 Margin="0,0,4,0"/>
                                                 <TextBlock Grid.Column="1" Text="{Binding DisplayName}"
                                                            FontSize="11" Foreground="#DC2626"
                                                            VerticalAlignment="Center"
                                                            TextTrimming="CharacterEllipsis"
                                                            ToolTip.Tip="{Binding Path}"/>
-                                                <Button Grid.Column="2" Content="✕" FontSize="10" Padding="6,0"
+                                                <Button Grid.Column="2" Padding="6,0"
                                                         Background="Transparent" Foreground="#DC2626"
                                                         ToolTip.Tip="Stop blocking this subfolder"
-                                                        Click="OnUnblockFolder"/>
+                                                        Click="OnUnblockFolder">
+                                                    <mi:MaterialIcon Kind="Close" Width="12" Height="12"/>
+                                                </Button>
                                             </Grid>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
 
                                 <!-- Add a subfolder to block -->
-                                <Button Content="＋ Block subfolder" FontSize="11" Padding="6,2"
+                                <Button Padding="6,2"
                                         Margin="10,4,0,0" HorizontalAlignment="Left"
                                         Background="Transparent" BorderThickness="0"
                                         Foreground="#DC2626"
                                         ToolTip.Tip="Choose a subfolder to exclude from results"
-                                        Click="OnAddBlockedFolder"/>
+                                        Click="OnAddBlockedFolder">
+                                    <StackPanel Orientation="Horizontal" Spacing="5">
+                                        <mi:MaterialIcon Kind="CancelOutline" Width="14" Height="14"
+                                                         VerticalAlignment="Center"/>
+                                        <TextBlock Text="Block subfolder" FontSize="11"
+                                                   VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
                             </StackPanel>
                         </Border>
                     </DataTemplate>
@@ -105,8 +125,9 @@
                 <ToggleButton DockPanel.Dock="Left" Margin="0,0,8,0" Padding="10,6"
                               VerticalAlignment="Stretch"
                               IsChecked="{Binding IsSidebarExpanded}"
-                              ToolTip.Tip="Toggle watched folders"
-                              Content="☰"/>
+                              ToolTip.Tip="Toggle watched folders">
+                    <mi:MaterialIcon Kind="Menu" Width="18" Height="18"/>
+                </ToggleButton>
                 <TextBox PlaceholderText="Search files and folders…"
                          FontSize="16" Text="{Binding SearchText}"/>
             </DockPanel>
@@ -116,8 +137,8 @@
                       IsExpanded="{Binding Filters.IsExpanded}">
                 <Expander.Header>
                     <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Path Data="M0,0 L14,0 L8.5,7 L8.5,13 L5.5,13 L5.5,7 Z" Fill="Gray"
-                              VerticalAlignment="Center" ToolTip.Tip="Filters"/>
+                        <mi:MaterialIcon Kind="FilterOutline" Width="16" Height="16"
+                                         VerticalAlignment="Center" ToolTip.Tip="Filters"/>
                         <TextBlock Text="{Binding Filters.ActiveSummary}" Foreground="#3B82F6"
                                    FontSize="11" VerticalAlignment="Center"/>
                     </StackPanel>
@@ -197,11 +218,7 @@
                         <Button Command="{Binding Filters.ClearFiltersCommand}"
                                 ToolTip.Tip="Clear filters"
                                 IsEnabled="{Binding Filters.HasActiveFilters}">
-                            <StackPanel Orientation="Horizontal" Spacing="4">
-                                <Path Data="M0,0 L14,0 L8.5,7 L8.5,13 L5.5,13 L5.5,7 Z" Fill="Gray"
-                                      VerticalAlignment="Center"/>
-                                <TextBlock Text="✕" FontSize="11" VerticalAlignment="Center"/>
-                            </StackPanel>
+                            <mi:MaterialIcon Kind="FilterRemoveOutline" Width="16" Height="16"/>
                         </Button>
                     </WrapPanel>
 
