@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -33,6 +34,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private AppSettings _settings;
 
+    // Gates UI-state persistence so restoring saved state on startup doesn't immediately rewrite it.
+    private bool _persistUiState;
+
     private CancellationTokenSource? _searchCts;
     private CancellationTokenSource? _resultsCts;
 
@@ -63,8 +67,19 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private string Indicator(ResultSortColumn column) => SortColumn == column ? " " + Arrow() : "";
     private string Arrow() => SortDescending ? "▾" : "▴";
 
-    partial void OnSortColumnChanged(ResultSortColumn value) => RaiseHeaderChanges();
-    partial void OnSortDescendingChanged(bool value) => RaiseHeaderChanges();
+    partial void OnSortColumnChanged(ResultSortColumn value)
+    {
+        RaiseHeaderChanges();
+        SaveUiState();
+    }
+
+    partial void OnSortDescendingChanged(bool value)
+    {
+        RaiseHeaderChanges();
+        SaveUiState();
+    }
+
+    partial void OnIsSidebarExpandedChanged(bool value) => SaveUiState();
 
     private void RaiseHeaderChanges()
     {
@@ -116,6 +131,45 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _settingsEditor = settingsEditor ?? new DialogSettingsEditor(() => null);
         _settings = _settingsStore.Load();
         Filters.CriteriaChanged += RerunSearch;
+
+        // Restore the saved drawer/sort layout, then start persisting subsequent changes. Subscribe after
+        // applying so the restore itself doesn't count as a change (also gated by _persistUiState).
+        ApplyPersistedUiState();
+        Filters.PropertyChanged += OnFiltersPropertyChanged;
+    }
+
+    /// <summary>Applies the persisted drawer open/close and sort state to the view model on startup.</summary>
+    private void ApplyPersistedUiState()
+    {
+        IsSidebarExpanded = _settings.SidebarExpanded;
+        Filters.IsExpanded = _settings.FiltersExpanded;
+        if (Enum.TryParse<ResultSortColumn>(_settings.SortColumn, out var column)) SortColumn = column;
+        SortDescending = _settings.SortDescending;
+        _persistUiState = true;
+    }
+
+    /// <summary>Persists the filters drawer state when the user opens/closes it.</summary>
+    private void OnFiltersPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(SearchFiltersViewModel.IsExpanded)) SaveUiState();
+    }
+
+    /// <summary>
+    /// Writes the current drawer (sidebar + filters) and sort state into settings. Merges onto the existing
+    /// settings so unrelated fields (e.g. the crawl time limit) are preserved. No-op until startup restore ran.
+    /// </summary>
+    private void SaveUiState()
+    {
+        if (!_persistUiState) return;
+
+        _settings = _settings with
+        {
+            SidebarExpanded = IsSidebarExpanded,
+            FiltersExpanded = Filters.IsExpanded,
+            SortColumn = SortColumn.ToString(),
+            SortDescending = SortDescending,
+        };
+        _settingsStore.Save(_settings);
     }
 
     /// <summary>Loads persisted watched folders and crawls them concurrently. Call once after the window shows.</summary>

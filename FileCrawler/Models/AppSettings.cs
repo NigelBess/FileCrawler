@@ -18,4 +18,16 @@ public sealed record AppSettings
     /// <summary>The crawl time limit as a <see cref="TimeSpan"/>, or null when unlimited (a non-positive value).</summary>
     [JsonIgnore]
     public TimeSpan? MaxCrawlTime => MaxCrawlSeconds > 0 ? TimeSpan.FromSeconds(MaxCrawlSeconds) : null;
+
+    /// <summary>Whether the watched-folders sidebar is expanded. Persisted so the layout survives restarts.</summary>
+    public bool SidebarExpanded { get; init; }
+
+    /// <summary>Whether the filter bar is expanded. Defaults to expanded.</summary>
+    public bool FiltersExpanded { get; init; } = true;
+
+    /// <summary>The result column the list is sorted by, stored as the <c>ResultSortColumn</c> name.</summary>
+    public string SortColumn { get; init; } = "Name";
+
+    /// <summary>Whether the current sort is descending.</summary>
+    public bool SortDescending { get; init; }
 }
