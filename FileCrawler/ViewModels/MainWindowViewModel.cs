@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FileCrawler.Models;
 using FileCrawler.Services;
+using FileCrawler.Utilities;
 
 namespace FileCrawler.ViewModels;
 
@@ -109,7 +110,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         var searchState = await _searchStateStore.LoadAsync();
         if (searchState is not null) Filters.RestoreState(searchState.Filters);
 
-        var saved = await _store.LoadAsync();
+        // A null load means the workspace has never been configured (true first run): seed the user's standard
+        // content folders so search works out of the box. A saved-but-empty workspace loads as Empty (not null),
+        // so a user who removed every folder isn't re-seeded on the next launch.
+        var loaded = await _store.LoadAsync();
+        var isFirstRun = loaded is null;
+        var saved = loaded ?? new WatchedFolderState(StandardUserFolders.Resolve(), Array.Empty<string>());
+
         if (saved.Folders.Count > 0)
         {
             IsBusy = true;
@@ -124,6 +131,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 ? "Add a folder to start searching."
                 : $"Ready — {_index.AllNodes.Count:N0} items indexed across {WatchedFolders.Count} folder(s).";
         }
+
+        // Persist the seeded folders so the next launch is no longer treated as a first run (and honors any
+        // folders the user later removes). Writing an empty set is still correct: it records that setup ran.
+        if (isFirstRun) await PersistAsync();
 
         // Replay the last search now that the index is ready. Setting a non-empty term triggers the search;
         // for an empty term we rerun explicitly so restored filters still take effect.

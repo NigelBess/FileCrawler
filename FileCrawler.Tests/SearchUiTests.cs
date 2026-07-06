@@ -291,7 +291,7 @@ public class SearchUiTests : IDisposable
     /// <summary>No-op persistence so tests don't touch %LOCALAPPDATA%.</summary>
     private sealed class NoopStore : IWatchedFolderStore
     {
-        public Task<WatchedFolderState> LoadAsync() => Task.FromResult(WatchedFolderState.Empty);
+        public Task<WatchedFolderState?> LoadAsync() => Task.FromResult<WatchedFolderState?>(WatchedFolderState.Empty);
         public Task SaveAsync(
             System.Collections.Generic.IEnumerable<string> folders,
             System.Collections.Generic.IEnumerable<string> blocked) => Task.CompletedTask;

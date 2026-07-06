@@ -28,19 +28,20 @@ public sealed class WatchedFolderStore : IWatchedFolderStore
     /// <summary>The legacy standalone file shape (version 1 had no <see cref="Blocked"/>).</summary>
     private sealed record LegacyFile(int Version, IReadOnlyList<string>? Folders, IReadOnlyList<string>? Blocked);
 
-    public Task<WatchedFolderState> LoadAsync() => Task.Run(Load);
+    public Task<WatchedFolderState?> LoadAsync() => Task.Run(Load);
 
     public Task SaveAsync(IEnumerable<string> folders, IEnumerable<string> blocked) =>
         Task.Run(() => Save(folders, blocked));
 
-    private WatchedFolderState Load()
+    private WatchedFolderState? Load()
     {
         var hasFolders = _data.TryLoad<List<string>>(FoldersKey, out var folders);
         var hasBlocked = _data.TryLoad<List<string>>(BlockedKey, out var blocked);
         if (hasFolders || hasBlocked)
             return new WatchedFolderState(folders ?? new(), blocked ?? new());
 
-        return TryMigrateLegacy() ?? WatchedFolderState.Empty;
+        // Nothing in the store: a migrated legacy file counts as configured; otherwise this is a first run.
+        return TryMigrateLegacy();
     }
 
     private void Save(IEnumerable<string> folders, IEnumerable<string> blocked)
