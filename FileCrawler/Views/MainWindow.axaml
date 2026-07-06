@@ -17,7 +17,23 @@
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
-    <Grid ColumnDefinitions="Auto,*">
+    <DockPanel>
+
+        <!-- Top menu bar -->
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="FileCrawler">
+                <MenuItem Header="Reset"
+                          Command="{Binding ResetCommand}"
+                          IsEnabled="{Binding !IsBusy}"
+                          ToolTip.Tip="Clear everything and restore the standard folders">
+                    <MenuItem.Icon>
+                        <mi:MaterialIcon Kind="Restore" Width="16" Height="16"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+            </MenuItem>
+        </Menu>
+
+        <Grid ColumnDefinitions="Auto,*">
 
         <!-- Left: watched folders (collapsible, collapsed by default) -->
         <DockPanel Grid.Column="0" Width="300"
@@ -393,5 +409,6 @@
                 </ListBox.ItemTemplate>
             </ListBox>
         </DockPanel>
-    </Grid>
+        </Grid>
+    </DockPanel>
 </Window>

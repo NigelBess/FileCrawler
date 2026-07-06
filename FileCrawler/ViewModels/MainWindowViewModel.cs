@@ -117,20 +117,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         var isFirstRun = loaded is null;
         var saved = loaded ?? new WatchedFolderState(StandardUserFolders.Resolve(), Array.Empty<string>());
 
-        if (saved.Folders.Count > 0)
-        {
-            IsBusy = true;
-            StatusText = $"Crawling {saved.Folders.Count} folder(s)…";
-
-            // Assign each persisted block to the watched root that contains it.
-            await Task.WhenAll(saved.Folders.Select(path =>
-                CrawlAndAddAsync(path, BlocksUnder(path, saved.Blocked))));
-
-            IsBusy = false;
-            StatusText = WatchedFolders.Count == 0
-                ? "Add a folder to start searching."
-                : $"Ready — {_index.AllNodes.Count:N0} items indexed across {WatchedFolders.Count} folder(s).";
-        }
+        await LoadFoldersAsync(saved);
 
         // Persist the seeded folders so the next launch is no longer treated as a first run (and honors any
         // folders the user later removes). Writing an empty set is still correct: it records that setup ran.
@@ -266,6 +253,27 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IsBusy = false;
 
         StatusText = $"Ready — {_index.AllNodes.Count:N0} items indexed across {WatchedFolders.Count} folder(s).";
+        RerunSearch();
+    }
+
+    /// <summary>
+    /// Resets the workspace to a clean slate: drops every watched folder and block, clears the search term and
+    /// all filters, then re-seeds the user's standard content folders (exactly as on first run) and crawls them.
+    /// </summary>
+    [RelayCommand]
+    private async Task ResetAsync()
+    {
+        // Drop every watched root from the index and the sidebar.
+        foreach (var folder in WatchedFolders.ToList()) _index.RemoveRoot(folder.Root);
+        WatchedFolders.Clear();
+
+        // Back to an empty search and default filters (this also clears any per-search folder blocks).
+        SearchText = "";
+        Filters.ClearFiltersCommand.Execute(null);
+
+        // Re-seed the standard folders exactly as a first run would, then persist and search.
+        await LoadFoldersAsync(new WatchedFolderState(StandardUserFolders.Resolve(), Array.Empty<string>()));
+        await PersistAsync();
         RerunSearch();
     }
 
@@ -427,6 +435,28 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         SortDescending ? rows.OrderByDescending(key, comparer) : rows.OrderBy(key, comparer);
 
     // --- Helpers ---
+
+    /// <summary>
+    /// Crawls every folder in <paramref name="state"/> concurrently (each honoring the blocks that fall under it)
+    /// and adds them to the index and sidebar, driving the busy indicator and status text. No-op for an empty set.
+    /// Shared by first-run/persisted load and by Reset.
+    /// </summary>
+    private async Task LoadFoldersAsync(WatchedFolderState state)
+    {
+        if (state.Folders.Count == 0) return;
+
+        IsBusy = true;
+        StatusText = $"Crawling {state.Folders.Count} folder(s)…";
+
+        // Assign each block to the watched root that contains it.
+        await Task.WhenAll(state.Folders.Select(path =>
+            CrawlAndAddAsync(path, BlocksUnder(path, state.Blocked))));
+
+        IsBusy = false;
+        StatusText = WatchedFolders.Count == 0
+            ? "Add a folder to start searching."
+            : $"Ready — {_index.AllNodes.Count:N0} items indexed across {WatchedFolders.Count} folder(s).";
+    }
 
     /// <summary>Crawls <paramref name="path"/> excluding <paramref name="blocked"/>, indexes it, and adds the row.</summary>
     private async Task CrawlAndAddAsync(string path, IReadOnlyList<string> blocked)
