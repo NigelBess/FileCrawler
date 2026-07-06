@@ -437,6 +437,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 };
                 foreach (var b in blocked) vm.BlockedSubfolders.Add(new BlockedFolderViewModel(b));
                 WatchedFolders.Add(vm);
+                FloatMissingFoldersToTop();
             });
         }
         catch (Exception ex)
@@ -462,6 +463,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             folder.LoadTime = sw.Elapsed;
             folder.IsMissing = !result.Exists;
             folder.Status = "";
+            FloatMissingFoldersToTop();
             return true;
         }
         catch (Exception ex)
@@ -510,6 +512,27 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IsBusy = false;
         await PersistAsync();
         RerunSearch();
+    }
+
+    /// <summary>
+    /// Reorders <see cref="WatchedFolders"/> so folders whose path is missing on disk sit at the top, where the
+    /// user can't miss the warning. Stable: within each group (missing / present) the existing relative order is
+    /// preserved, and it moves only the items actually out of place, so an unchanged list stays put.
+    /// </summary>
+    private void FloatMissingFoldersToTop()
+    {
+        var desired = WatchedFolders
+            .Select((folder, index) => (folder, index))
+            .OrderBy(x => x.folder.IsMissing ? 0 : 1)
+            .ThenBy(x => x.index)
+            .Select(x => x.folder)
+            .ToList();
+
+        for (var target = 0; target < desired.Count; target++)
+        {
+            var current = WatchedFolders.IndexOf(desired[target]);
+            if (current != target) WatchedFolders.Move(current, target);
+        }
     }
 
     /// <summary>The blocked paths from <paramref name="blocked"/> that fall under watched root <paramref name="path"/>.</summary>

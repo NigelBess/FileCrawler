@@ -21,6 +21,15 @@ internal sealed class FakeFolderPicker : IFolderPicker
     public Task<string?> PickFolderAsync() => Task.FromResult<string?>(_path);
 }
 
+/// <summary>A folder picker whose returned path can be swapped between calls (to add several folders).</summary>
+internal sealed class SwitchableFolderPicker : IFolderPicker
+{
+    private string _current;
+    public SwitchableFolderPicker(string first) => _current = first;
+    public string Next { set => _current = value; }
+    public Task<string?> PickFolderAsync() => Task.FromResult<string?>(_current);
+}
+
 /// <summary>A block picker that auto-selects the deepest offered level (no dialog) for tests.</summary>
 internal sealed class FakeSubfolderBlockPicker : ISubfolderBlockPicker
 {
@@ -181,6 +190,26 @@ public class SearchUiTests : IDisposable
         // The warning's Delete button is wired to the same remove command.
         await vm.RemoveFolderCommand.ExecuteAsync(folder);
         Assert.Empty(vm.WatchedFolders);
+    }
+
+    [AvaloniaFact]
+    public async Task Missing_folders_float_to_the_top_of_the_watched_list()
+    {
+        var index = new FileIndex();
+        // A missing path OUTSIDE _tree, so it isn't rejected as nested under the present watched folder.
+        var gone = Path.Combine(Path.GetTempPath(), "FCGone_" + Guid.NewGuid().ToString("N"), "GoneFolder");
+        var picker = new SwitchableFolderPicker(_tree); // present folder first…
+        var vm = new MainWindowViewModel(
+            new DirectoryCrawler(), index, new NoopStore(), new NoopSearchStateStore(),
+            new SearchService(index), picker, new FakeSubfolderBlockPicker());
+
+        await vm.AddFolderCommand.ExecuteAsync(null);     // present — added first
+        picker.Next = gone;
+        await vm.AddFolderCommand.ExecuteAsync(null);      // missing — added second
+
+        // Despite being added second, the missing folder is floated to the top so the warning is seen.
+        Assert.True(vm.WatchedFolders[0].IsMissing);
+        Assert.False(vm.WatchedFolders[1].IsMissing);
     }
 
     [AvaloniaFact]
