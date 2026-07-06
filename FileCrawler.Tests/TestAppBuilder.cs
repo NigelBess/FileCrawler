@@ -2,8 +2,14 @@ using Avalonia;
 using Avalonia.Headless;
 using FileCrawler;
 using FileCrawler.Tests;
+using Xunit;
 
 [assembly: AvaloniaTestApplication(typeof(TestAppBuilder))]
+
+// Run test collections serially. The UI tests depend on real-time debounce/search windows and share a single
+// headless Avalonia app, so overlapping them (with each other or with CPU/disk-heavy crawl tests) makes their
+// timing assertions flaky.
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
 
 namespace FileCrawler.Tests;
 

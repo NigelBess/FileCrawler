@@ -46,7 +46,8 @@ public sealed class DirectoryCrawler : IDirectoryCrawler
         string rootPath,
         IReadOnlySet<string>? blockedFolders,
         IProgress<CrawlProgress>? progress,
-        CancellationToken ct)
+        CancellationToken ct,
+        TimeSpan? maxCrawlTime = null)
     {
         rootPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(rootPath));
         var blocked = blockedFolders ?? NoBlocked;
@@ -69,12 +70,58 @@ public sealed class DirectoryCrawler : IDirectoryCrawler
             ModifiedUtc = rootModified,
         };
 
-        await Task.Run(() => CrawlDirectory(root, rootPath, rootPath, blocked, progress, ref skipped, ref nodeCount, parallelize: true, ct), ct)
+        // Enforce the per-folder time limit by cancelling a linked token once it elapses. The crawl watches the
+        // token and stops gracefully (keeping partial results) rather than throwing. Null/non-positive = no cap.
+        using var timeoutCts = maxCrawlTime is { } limit && limit > TimeSpan.Zero
+            ? CancellationTokenSource.CreateLinkedTokenSource(ct)
+            : null;
+        timeoutCts?.CancelAfter(maxCrawlTime!.Value);
+        var effectiveCt = timeoutCts?.Token ?? ct;
+
+        // Don't pass the token to Task.Run: the delegate handles cancellation gracefully and must always run to
+        // completion so the partial tree it built is returned rather than lost to a TaskCanceledException.
+        await Task.Run(() => CrawlDirectory(root, rootPath, rootPath, blocked, progress, ref skipped, ref nodeCount, parallelize: true, effectiveCt))
             .ConfigureAwait(false);
 
         var all = Flatten(root);
+
+        // A time-out is the linked token tripping without the caller having cancelled — distinguishes "ran out
+        // of time" from an external cancel so only the former warns and suggests a folder to block.
+        var timedOut = timeoutCts is not null && effectiveCt.IsCancellationRequested && !ct.IsCancellationRequested;
+        var suggestion = timedOut ? SuggestBlockTarget(root, rootPath) : null;
+
         var (blockedItems, blockedCapped) = CountBlocked(blocked, ct);
-        return new CrawlResult(root, all, skipped, blockedItems, blockedCapped, exists);
+        return new CrawlResult(root, all, skipped, blockedItems, blockedCapped, exists, timedOut, suggestion);
+    }
+
+    /// <summary>
+    /// After a timed-out crawl, picks the immediate subfolder with the largest crawled subtree — the branch that
+    /// consumed most of the time budget, the likeliest "full of stuff" culprit — as a one-click block suggestion.
+    /// Returns its absolute path, or null when the root has no subfolders worth suggesting.
+    /// </summary>
+    private static string? SuggestBlockTarget(FileNode root, string rootPath)
+    {
+        if (root.Children is null) return null;
+
+        FileNode? biggest = null;
+        var max = 0;
+        foreach (var child in root.Children)
+        {
+            if (!child.IsDirectory) continue;
+            var count = CountSubtree(child);
+            if (count > max) { max = count; biggest = child; }
+        }
+
+        return biggest is null ? null : Path.Combine(rootPath, biggest.Name);
+    }
+
+    /// <summary>Total node count in <paramref name="node"/>'s subtree, itself included.</summary>
+    private static int CountSubtree(FileNode node)
+    {
+        var count = 1;
+        if (node.Children is { Length: > 0 } children)
+            foreach (var child in children) count += CountSubtree(child);
+        return count;
     }
 
     /// <summary>
@@ -126,8 +173,6 @@ public sealed class DirectoryCrawler : IDirectoryCrawler
         bool parallelize,
         CancellationToken ct)
     {
-        ct.ThrowIfCancellationRequested();
-
         var children = new List<FileNode>();
         var subDirs = new List<FileNode>(); // directory children needing recursion (non-reparse)
         long ownSize = 0;
@@ -181,8 +226,20 @@ public sealed class DirectoryCrawler : IDirectoryCrawler
             Interlocked.Increment(ref skipped);
         }
 
+        // Publish this level's children before recursing so the node stays coherent even if the crawl stops
+        // (hits its time limit) partway through: uncrawled subfolders simply remain as empty directory nodes,
+        // still searchable, and everything gathered so far survives.
+        dir.Children = children.ToArray();
+
         var count = Interlocked.Add(ref nodeCount, children.Count);
         progress?.Report(new CrawlProgress(rootPath, count));
+
+        // Out of time: stop descending. The subtree below here is left partial (sizes therefore incomplete).
+        if (ct.IsCancellationRequested)
+        {
+            dir.SizeBytes = ownSize;
+            return;
+        }
 
         // Recurse into subdirectories (post-order size aggregation).
         long childrenSize = 0;
@@ -193,10 +250,13 @@ public sealed class DirectoryCrawler : IDirectoryCrawler
                 var partials = new long[subDirs.Count];
                 var localSkipped = 0;
                 var localCount = 0;
+                // No CancellationToken on ParallelOptions: a time-out must stop the crawl gracefully (keeping the
+                // partial tree), not throw. Each iteration bails early once the token trips.
                 Parallel.For(0, subDirs.Count,
-                    new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount, CancellationToken = ct },
+                    new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
                     i =>
                     {
+                        if (ct.IsCancellationRequested) return;
                         var sub = subDirs[i];
                         CrawlDirectory(sub, Path.Combine(dirPath, sub.Name), rootPath, blocked, progress,
                             ref localSkipped, ref localCount, parallelize: false, ct);
@@ -210,6 +270,7 @@ public sealed class DirectoryCrawler : IDirectoryCrawler
             {
                 foreach (var sub in subDirs)
                 {
+                    if (ct.IsCancellationRequested) break;
                     CrawlDirectory(sub, Path.Combine(dirPath, sub.Name), rootPath, blocked, progress,
                         ref skipped, ref nodeCount, parallelize: false, ct);
                     childrenSize += sub.SizeBytes;
@@ -217,7 +278,6 @@ public sealed class DirectoryCrawler : IDirectoryCrawler
             }
         }
 
-        dir.Children = children.ToArray();
         dir.SizeBytes = ownSize + childrenSize;
     }
 

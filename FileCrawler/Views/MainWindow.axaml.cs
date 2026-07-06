@@ -29,6 +29,12 @@ namespace FileCrawler.Views
                 ViewModel?.RemoveFolderCommand.Execute(folder);
         }
 
+        private void OnBlockSuggestedSubfolder(object? sender, RoutedEventArgs e)
+        {
+            if ((sender as Control)?.DataContext is WatchedFolderViewModel folder)
+                ViewModel?.BlockSuggestedSubfolderCommand.Execute(folder);
+        }
+
         private void OnResultDoubleTapped(object? sender, TappedEventArgs e)
         {
             // Resolve the row from the actually-tapped element rather than SelectedItem, which may not have

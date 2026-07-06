@@ -28,6 +28,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IFolderPicker _picker;
     private readonly ISubfolderBlockPicker _blockPicker;
     private readonly IConfirmationService _confirm;
+    private readonly ISettingsStore _settingsStore;
+    private readonly ISettingsEditor _settingsEditor;
+
+    private AppSettings _settings;
 
     private CancellationTokenSource? _searchCts;
     private CancellationTokenSource? _resultsCts;
@@ -82,6 +86,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _picker = new StorageFolderPicker(() => null);
         _blockPicker = new DialogSubfolderBlockPicker(() => null);
         _confirm = new DialogConfirmationService(() => null);
+        _settingsStore = new SettingsStore();
+        _settingsEditor = new DialogSettingsEditor(() => null);
+        _settings = new AppSettings();
         Filters.CriteriaChanged += RerunSearch;
     }
 
@@ -93,7 +100,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ISearchService search,
         IFolderPicker picker,
         ISubfolderBlockPicker blockPicker,
-        IConfirmationService confirm)
+        IConfirmationService confirm,
+        ISettingsStore? settingsStore = null,
+        ISettingsEditor? settingsEditor = null)
     {
         _crawler = crawler;
         _index = index;
@@ -103,6 +112,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _picker = picker;
         _blockPicker = blockPicker;
         _confirm = confirm;
+        _settingsStore = settingsStore ?? new SettingsStore();
+        _settingsEditor = settingsEditor ?? new DialogSettingsEditor(() => null);
+        _settings = _settingsStore.Load();
         Filters.CriteriaChanged += RerunSearch;
     }
 
@@ -232,6 +244,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         StatusText = resolution.Superseded.Count > 0
             ? $"Added “{candidate}” and removed {resolution.Superseded.Count} folder(s) now covered by it."
             : $"Added “{candidate}”.";
+        SurfaceIncompleteCrawls();
         RerunSearch();
     }
 
@@ -257,6 +270,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IsBusy = false;
 
         StatusText = $"Ready — {_index.AllNodes.Count:N0} items indexed across {WatchedFolders.Count} folder(s).";
+        SurfaceIncompleteCrawls();
         RerunSearch();
     }
 
@@ -286,6 +300,31 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         await LoadFoldersAsync(new WatchedFolderState(StandardUserFolders.Resolve(), Array.Empty<string>()));
         await PersistAsync();
         RerunSearch();
+    }
+
+    /// <summary>Opens the settings editor and persists any changes (they apply to subsequent crawls).</summary>
+    [RelayCommand]
+    private async Task OpenSettingsAsync()
+    {
+        var updated = await _settingsEditor.EditAsync(_settings);
+        if (updated is null) return;
+
+        _settings = updated;
+        _settingsStore.Save(updated);
+        StatusText = _settings.MaxCrawlTime is { } limit
+            ? $"Settings saved. Folders stop crawling after {limit.TotalSeconds:N0} s."
+            : "Settings saved. Folder crawl time is now unlimited.";
+    }
+
+    /// <summary>
+    /// One-click block of the subfolder suggested after a timed-out crawl (the largest crawled branch) from every
+    /// search, then recrawls — freeing the crawl to finish within the time limit. No-op without a suggestion.
+    /// </summary>
+    [RelayCommand]
+    private async Task BlockSuggestedSubfolderAsync(WatchedFolderViewModel? folder)
+    {
+        if (folder?.SuggestedBlockPath is not { Length: > 0 } blockPath) return;
+        await AddBlockAsync(folder, blockPath);
     }
 
     /// <summary>
@@ -467,6 +506,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         StatusText = WatchedFolders.Count == 0
             ? "Add a folder to start searching."
             : $"Ready — {_index.AllNodes.Count:N0} items indexed across {WatchedFolders.Count} folder(s).";
+        SurfaceIncompleteCrawls();
     }
 
     /// <summary>Crawls <paramref name="path"/> excluding <paramref name="blocked"/>, indexes it, and adds the row.</summary>
@@ -475,7 +515,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         try
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            var result = await _crawler.CrawlAsync(path, ToSet(blocked), null, CancellationToken.None);
+            var result = await _crawler.CrawlAsync(path, ToSet(blocked), null, CancellationToken.None, _settings.MaxCrawlTime);
             sw.Stop();
             _index.AddRoot(result);
             await Dispatcher.UIThread.InvokeAsync(() =>
@@ -486,6 +526,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                     ItemCount = Math.Max(0, result.AllNodes.Count - 1),
                     LoadTime = sw.Elapsed,
                     IsMissing = !result.Exists,
+                    IsIncomplete = result.TimedOut,
+                    SuggestedBlockPath = result.SuggestedBlockPath,
                 };
                 foreach (var b in blocked) vm.BlockedSubfolders.Add(new BlockedFolderViewModel(b));
                 WatchedFolders.Add(vm);
@@ -507,13 +549,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         {
             var blocked = ToSet(folder.BlockedSubfolders.Select(b => b.Path));
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            var result = await _crawler.CrawlAsync(folder.Path, blocked, null, CancellationToken.None);
+            var result = await _crawler.CrawlAsync(folder.Path, blocked, null, CancellationToken.None, _settings.MaxCrawlTime);
             sw.Stop();
             _index.ReplaceRoot(folder.Root, result);
             folder.Root = result.Root;
             folder.ItemCount = Math.Max(0, result.AllNodes.Count - 1);
             folder.LoadTime = sw.Elapsed;
             folder.IsMissing = !result.Exists;
+            folder.IsIncomplete = result.TimedOut;
+            folder.SuggestedBlockPath = result.SuggestedBlockPath;
             folder.Status = "";
             FloatMissingFoldersToTop();
             return true;
@@ -563,7 +607,23 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         await RecrawlFolderAsync(folder);
         IsBusy = false;
         await PersistAsync();
+        SurfaceIncompleteCrawls();
         RerunSearch();
+    }
+
+    /// <summary>
+    /// If any watched folder's crawl timed out, expands the sidebar (so the in-row yellow warning and its
+    /// one-click block button are visible) and reflects it in the status line. No-op when everything finished.
+    /// </summary>
+    private void SurfaceIncompleteCrawls()
+    {
+        var incomplete = WatchedFolders.Count(f => f.IsIncomplete);
+        if (incomplete == 0) return;
+
+        IsSidebarExpanded = true;
+        StatusText = incomplete == 1
+            ? "A folder took too long to crawl — its results may be incomplete. Open the sidebar to block a large subfolder or raise the limit in Settings."
+            : $"{incomplete} folders took too long to crawl — their results may be incomplete. Open the sidebar to block large subfolders or raise the limit in Settings.";
     }
 
     /// <summary>

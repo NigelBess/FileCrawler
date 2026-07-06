@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
+using FileCrawler.Models;
 using FileCrawler.Services;
 using FileCrawler.ViewModels;
 using FileCrawler.Views;
@@ -69,7 +70,7 @@ public class SearchUiTests : IDisposable
         var vm = new MainWindowViewModel(
             new DirectoryCrawler(), index, new NoopStore(), new NoopSearchStateStore(),
             new SearchService(index), new FakeFolderPicker(_tree), new FakeSubfolderBlockPicker(),
-            new FakeConfirmationService(true));
+            new FakeConfirmationService(true), new NoopSettingsStore());
         var window = new MainWindow { DataContext = vm };
         window.Show();
         return (window, vm);
@@ -190,7 +191,7 @@ public class SearchUiTests : IDisposable
         var vm = new MainWindowViewModel(
             new DirectoryCrawler(), index, new NoopStore(), new NoopSearchStateStore(),
             new SearchService(index), new FakeFolderPicker(gone), new FakeSubfolderBlockPicker(),
-            new FakeConfirmationService(true));
+            new FakeConfirmationService(true), new NoopSettingsStore());
 
         await vm.AddFolderCommand.ExecuteAsync(null);
 
@@ -212,7 +213,7 @@ public class SearchUiTests : IDisposable
         var vm = new MainWindowViewModel(
             new DirectoryCrawler(), index, new NoopStore(), new NoopSearchStateStore(),
             new SearchService(index), picker, new FakeSubfolderBlockPicker(),
-            new FakeConfirmationService(true));
+            new FakeConfirmationService(true), new NoopSettingsStore());
 
         await vm.AddFolderCommand.ExecuteAsync(null);     // present — added first
         picker.Next = gone;
@@ -313,5 +314,12 @@ public class SearchUiTests : IDisposable
     {
         public Task<SearchState?> LoadAsync() => Task.FromResult<SearchState?>(null);
         public Task SaveAsync(SearchState state) => Task.CompletedTask;
+    }
+
+    /// <summary>In-memory settings (defaults) so tests don't touch %LOCALAPPDATA%.</summary>
+    private sealed class NoopSettingsStore : ISettingsStore
+    {
+        public AppSettings Load() => new();
+        public void Save(AppSettings settings) { }
     }
 }

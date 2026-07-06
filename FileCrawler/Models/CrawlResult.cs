@@ -9,6 +9,9 @@ namespace FileCrawler.Models;
 /// so they know results are incomplete. <see cref="BlockedItemsCapped"/> marks the count as a lower bound.
 /// <see cref="Exists"/> is false when the root path was not found on disk (a moved/deleted watched folder),
 /// so the UI can warn instead of silently reporting an empty crawl.
+/// <see cref="TimedOut"/> is true when the crawl hit its time limit before finishing: the tree is partial but
+/// everything gathered so far is still indexed, and <see cref="SuggestedBlockPath"/> names the largest crawled
+/// subfolder — a one-click block candidate to let a re-crawl finish in time.
 /// </summary>
 public sealed record CrawlResult(
     FileNode Root,
@@ -16,4 +19,6 @@ public sealed record CrawlResult(
     int Skipped,
     int BlockedItems = 0,
     bool BlockedItemsCapped = false,
-    bool Exists = true);
+    bool Exists = true,
+    bool TimedOut = false,
+    string? SuggestedBlockPath = null);
