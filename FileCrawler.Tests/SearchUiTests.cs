@@ -44,6 +44,7 @@ internal sealed class FakeConfirmationService : IConfirmationService
     private readonly bool _answer;
     public FakeConfirmationService(bool answer) => _answer = answer;
     public Task<bool> ConfirmAsync(string title, string message, string confirmText) => Task.FromResult(_answer);
+    public Task NotifyAsync(string title, string message, string okText = "OK") => Task.CompletedTask;
 }
 
 public class SearchUiTests : IDisposable

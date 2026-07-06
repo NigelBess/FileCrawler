@@ -15,6 +15,9 @@ public interface IConfirmationService
     /// <paramref name="confirmText"/> (alongside a Cancel button). Returns true only if the user confirms.
     /// </summary>
     Task<bool> ConfirmAsync(string title, string message, string confirmText);
+
+    /// <summary>Shows a modal informational message with a single acknowledge button.</summary>
+    Task NotifyAsync(string title, string message, string okText = "OK");
 }
 
 /// <summary>Shows a modal <see cref="ConfirmationDialog"/> owned by a supplied window (the main window).</summary>
@@ -31,5 +34,14 @@ public sealed class DialogConfirmationService : IConfirmationService
 
         var dialog = new ConfirmationDialog(title, message, confirmText);
         return await dialog.ShowDialog<bool>(owner);
+    }
+
+    public async Task NotifyAsync(string title, string message, string okText = "OK")
+    {
+        var owner = _owner();
+        if (owner is null) return;
+
+        var dialog = new ConfirmationDialog(title, message, okText, showCancel: false);
+        await dialog.ShowDialog<bool>(owner);
     }
 }
