@@ -433,6 +433,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                     // AllNodes includes the root itself, which isn't a "file or subfolder".
                     ItemCount = Math.Max(0, result.AllNodes.Count - 1),
                     LoadTime = sw.Elapsed,
+                    IsMissing = !result.Exists,
                 };
                 foreach (var b in blocked) vm.BlockedSubfolders.Add(new BlockedFolderViewModel(b));
                 WatchedFolders.Add(vm);
@@ -459,6 +460,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             folder.Root = result.Root;
             folder.ItemCount = Math.Max(0, result.AllNodes.Count - 1);
             folder.LoadTime = sw.Elapsed;
+            folder.IsMissing = !result.Exists;
             folder.Status = "";
             return true;
         }

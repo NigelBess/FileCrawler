@@ -51,6 +51,8 @@ public sealed class DirectoryCrawler : IDirectoryCrawler
         rootPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(rootPath));
         var blocked = blockedFolders ?? NoBlocked;
 
+        var exists = Directory.Exists(rootPath);
+
         DateTime rootModified;
         try { rootModified = Directory.GetLastWriteTimeUtc(rootPath); }
         catch { rootModified = default; }
@@ -72,7 +74,7 @@ public sealed class DirectoryCrawler : IDirectoryCrawler
 
         var all = Flatten(root);
         var (blockedItems, blockedCapped) = CountBlocked(blocked, ct);
-        return new CrawlResult(root, all, skipped, blockedItems, blockedCapped);
+        return new CrawlResult(root, all, skipped, blockedItems, blockedCapped, exists);
     }
 
     /// <summary>

@@ -15,6 +15,10 @@ public sealed partial class WatchedFolderViewModel : ObservableObject
     [ObservableProperty] private int _itemCount;
     [ObservableProperty] private TimeSpan _loadTime;
 
+    /// <summary>True when the folder no longer exists on disk (moved/deleted). The row shows a warning and a
+    /// delete button instead of the usual size/count stats.</summary>
+    [ObservableProperty] private bool _isMissing;
+
     public WatchedFolderViewModel(string path, FileNode root)
     {
         Path = path;

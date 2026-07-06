@@ -68,7 +68,7 @@
                                 </Grid>
                                 <SelectableTextBlock Text="{Binding Path}" FontSize="10" Foreground="Gray"
                                            TextTrimming="CharacterEllipsis"/>
-                                <WrapPanel Margin="0,2,0,0">
+                                <WrapPanel Margin="0,2,0,0" IsVisible="{Binding !IsMissing}">
                                     <SelectableTextBlock Text="{Binding FormattedSize}" FontSize="11" Foreground="Gray"
                                                Margin="0,0,8,0"/>
                                     <SelectableTextBlock Text="{Binding FormattedItemCount}" FontSize="11" Foreground="Gray"
@@ -77,6 +77,31 @@
                                                Margin="0,0,8,0"/>
                                     <SelectableTextBlock Text="{Binding Status}" FontSize="11" Foreground="#3B82F6"/>
                                 </WrapPanel>
+
+                                <!-- Folder missing on disk: warn (in amber) and offer a one-click remove instead
+                                     of silently showing a 0-byte, 0-item crawl. -->
+                                <Border Margin="0,4,0,0" Padding="6,4" CornerRadius="4"
+                                        Background="#33F59E0B" BorderBrush="#F59E0B" BorderThickness="1"
+                                        IsVisible="{Binding IsMissing}">
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <mi:MaterialIcon Grid.Column="0" Kind="AlertOutline"
+                                                         Width="15" Height="15" Foreground="#B45309"
+                                                         VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <TextBlock Grid.Column="1" Text="Path not found" FontSize="11"
+                                                   Foreground="#B45309" VerticalAlignment="Center"
+                                                   TextWrapping="Wrap"/>
+                                        <Button Grid.Column="2" Padding="6,1" Margin="6,0,0,0"
+                                                Background="Transparent" BorderThickness="1" BorderBrush="#B45309"
+                                                Foreground="#B45309"
+                                                ToolTip.Tip="Remove this watched folder"
+                                                Click="OnRemoveFolder">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <mi:MaterialIcon Kind="TrashCanOutline" Width="13" Height="13"/>
+                                                <TextBlock Text="Delete" FontSize="11" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                </Border>
 
                                 <!-- Blocked subfolders nested under their watched folder, in red -->
                                 <ItemsControl ItemsSource="{Binding BlockedSubfolders}"
@@ -94,6 +119,7 @@
                                 <Button Padding="6,2"
                                         Margin="10,4,0,0" HorizontalAlignment="Left"
                                         Background="Transparent" BorderThickness="0"
+                                        IsVisible="{Binding !IsMissing}"
                                         ToolTip.Tip="Choose a subfolder to exclude from results"
                                         Click="OnAddBlockedFolder">
                                     <StackPanel Orientation="Horizontal" Spacing="5">

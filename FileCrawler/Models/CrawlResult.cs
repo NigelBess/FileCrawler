@@ -7,10 +7,13 @@ namespace FileCrawler.Models;
 /// a count of entries that were skipped (inaccessible, etc.), and a (capped) count of items living under
 /// this root's blocked subfolders — content deliberately excluded from the index but surfaced to the user
 /// so they know results are incomplete. <see cref="BlockedItemsCapped"/> marks the count as a lower bound.
+/// <see cref="Exists"/> is false when the root path was not found on disk (a moved/deleted watched folder),
+/// so the UI can warn instead of silently reporting an empty crawl.
 /// </summary>
 public sealed record CrawlResult(
     FileNode Root,
     IReadOnlyList<FileNode> AllNodes,
     int Skipped,
     int BlockedItems = 0,
-    bool BlockedItemsCapped = false);
+    bool BlockedItemsCapped = false,
+    bool Exists = true);

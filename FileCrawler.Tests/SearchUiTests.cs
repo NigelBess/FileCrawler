@@ -165,6 +165,25 @@ public class SearchUiTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task Adding_a_nonexistent_path_flags_the_folder_as_missing()
+    {
+        var index = new FileIndex();
+        var gone = Path.Combine(_tree, "does-not-exist", "GoneFolder"); // never created on disk
+        var vm = new MainWindowViewModel(
+            new DirectoryCrawler(), index, new NoopStore(), new NoopSearchStateStore(),
+            new SearchService(index), new FakeFolderPicker(gone), new FakeSubfolderBlockPicker());
+
+        await vm.AddFolderCommand.ExecuteAsync(null);
+
+        var folder = vm.WatchedFolders.Single();
+        Assert.True(folder.IsMissing);
+
+        // The warning's Delete button is wired to the same remove command.
+        await vm.RemoveFolderCommand.ExecuteAsync(folder);
+        Assert.Empty(vm.WatchedFolders);
+    }
+
+    [AvaloniaFact]
     public async Task Blocked_summary_shows_for_a_real_search_but_hides_when_filters_match_nothing()
     {
         var (_, vm) = BuildUi();
