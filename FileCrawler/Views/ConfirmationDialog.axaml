@@ -1,0 +1,31 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        x:Class="FileCrawler.Views.ConfirmationDialog"
+        Icon="/Assets/app-icon.ico"
+        Width="420" SizeToContent="Height"
+        MaxHeight="520"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Title="Confirm">
+
+    <DockPanel Margin="16">
+
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,10" ColumnDefinitions="Auto,*">
+            <mi:MaterialIcon Grid.Column="0" Kind="AlertOutline" Width="22" Height="22"
+                             Foreground="#B45309" VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <TextBlock x:Name="HeadingText" Grid.Column="1"
+                       FontWeight="SemiBold" FontSize="15"
+                       VerticalAlignment="Center" TextWrapping="Wrap"/>
+        </Grid>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                    HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
+            <Button x:Name="CancelButton" Content="Cancel" Padding="14,6" Click="OnCancel"/>
+            <Button x:Name="ConfirmButton" Content="OK" Padding="14,6" Classes="accent" Click="OnConfirm"/>
+        </StackPanel>
+
+        <TextBlock x:Name="MessageText" Foreground="Gray" TextWrapping="Wrap"/>
+
+    </DockPanel>
+</Window>

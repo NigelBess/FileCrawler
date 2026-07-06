@@ -27,6 +27,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly ISearchService _search;
     private readonly IFolderPicker _picker;
     private readonly ISubfolderBlockPicker _blockPicker;
+    private readonly IConfirmationService _confirm;
 
     private CancellationTokenSource? _searchCts;
     private CancellationTokenSource? _resultsCts;
@@ -80,6 +81,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _search = new SearchService(_index);
         _picker = new StorageFolderPicker(() => null);
         _blockPicker = new DialogSubfolderBlockPicker(() => null);
+        _confirm = new DialogConfirmationService(() => null);
         Filters.CriteriaChanged += RerunSearch;
     }
 
@@ -90,7 +92,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ISearchStateStore searchStateStore,
         ISearchService search,
         IFolderPicker picker,
-        ISubfolderBlockPicker blockPicker)
+        ISubfolderBlockPicker blockPicker,
+        IConfirmationService confirm)
     {
         _crawler = crawler;
         _index = index;
@@ -99,6 +102,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _search = search;
         _picker = picker;
         _blockPicker = blockPicker;
+        _confirm = confirm;
         Filters.CriteriaChanged += RerunSearch;
     }
 
@@ -263,6 +267,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private async Task ResetAsync()
     {
+        var confirmed = await _confirm.ConfirmAsync(
+            "Reset FileCrawler?",
+            "This removes all watched folders, blocked subfolders, filters and the current search, then " +
+            "restores the standard folders (Documents, Desktop, Downloads, and so on). This can't be undone.",
+            "Reset");
+        if (!confirmed) return;
+
         // Drop every watched root from the index and the sidebar.
         foreach (var folder in WatchedFolders.ToList()) _index.RemoveRoot(folder.Root);
         WatchedFolders.Clear();

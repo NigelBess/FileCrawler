@@ -37,6 +37,14 @@ internal sealed class FakeSubfolderBlockPicker : ISubfolderBlockPicker
         Task.FromResult<string?>(candidatePaths.Count > 0 ? candidatePaths[^1] : null);
 }
 
+/// <summary>A confirmation service that returns a fixed answer (no dialog) for tests.</summary>
+internal sealed class FakeConfirmationService : IConfirmationService
+{
+    private readonly bool _answer;
+    public FakeConfirmationService(bool answer) => _answer = answer;
+    public Task<bool> ConfirmAsync(string title, string message, string confirmText) => Task.FromResult(_answer);
+}
+
 public class SearchUiTests : IDisposable
 {
     private readonly string _tree;
@@ -60,7 +68,8 @@ public class SearchUiTests : IDisposable
         var index = new FileIndex();
         var vm = new MainWindowViewModel(
             new DirectoryCrawler(), index, new NoopStore(), new NoopSearchStateStore(),
-            new SearchService(index), new FakeFolderPicker(_tree), new FakeSubfolderBlockPicker());
+            new SearchService(index), new FakeFolderPicker(_tree), new FakeSubfolderBlockPicker(),
+            new FakeConfirmationService(true));
         var window = new MainWindow { DataContext = vm };
         window.Show();
         return (window, vm);
@@ -180,7 +189,8 @@ public class SearchUiTests : IDisposable
         var gone = Path.Combine(_tree, "does-not-exist", "GoneFolder"); // never created on disk
         var vm = new MainWindowViewModel(
             new DirectoryCrawler(), index, new NoopStore(), new NoopSearchStateStore(),
-            new SearchService(index), new FakeFolderPicker(gone), new FakeSubfolderBlockPicker());
+            new SearchService(index), new FakeFolderPicker(gone), new FakeSubfolderBlockPicker(),
+            new FakeConfirmationService(true));
 
         await vm.AddFolderCommand.ExecuteAsync(null);
 
@@ -201,7 +211,8 @@ public class SearchUiTests : IDisposable
         var picker = new SwitchableFolderPicker(_tree); // present folder first…
         var vm = new MainWindowViewModel(
             new DirectoryCrawler(), index, new NoopStore(), new NoopSearchStateStore(),
-            new SearchService(index), picker, new FakeSubfolderBlockPicker());
+            new SearchService(index), picker, new FakeSubfolderBlockPicker(),
+            new FakeConfirmationService(true));
 
         await vm.AddFolderCommand.ExecuteAsync(null);     // present — added first
         picker.Next = gone;
