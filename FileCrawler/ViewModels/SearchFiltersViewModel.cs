@@ -144,6 +144,12 @@ public sealed partial class SearchFiltersViewModel : ViewModelBase
     [ObservableProperty] private bool _hasActiveFilters;
     [ObservableProperty] private string _activeSummary = "";
 
+    // The result sort order is part of the filter: it's captured, restored, and cleared alongside everything
+    // else, so presets carry it and editing it stars the preset title. It doesn't raise CriteriaChanged — the
+    // owner re-sorts the current results in place (no re-search) when it changes.
+    [ObservableProperty] private ResultSortColumn _sortColumn = ResultSortColumn.Name;
+    [ObservableProperty] private bool _sortDescending;
+
     public bool IsCustomDate => SelectedDatePreset.Value == DatePreset.Custom;
 
     /// <summary>Suppresses per-change callbacks while a bulk update (Select all / none / Clear) runs,
@@ -236,6 +242,21 @@ public sealed partial class SearchFiltersViewModel : ViewModelBase
         return criteria;
     }
 
+    /// <summary>Applies a click on a sortable column header: flips direction if it's already the active column,
+    /// otherwise switches to it ascending. Sort is part of the filter, so this participates in preset save/modify.</summary>
+    public void ToggleSort(ResultSortColumn column)
+    {
+        if (column == SortColumn)
+        {
+            SortDescending = !SortDescending;
+        }
+        else
+        {
+            SortColumn = column;
+            SortDescending = false;
+        }
+    }
+
     /// <summary>Snapshots the current filter selections for persistence.</summary>
     public FilterState CaptureState() => new(
         Categories.SelectMany(c => c.SelectedExtensions).ToList(),
@@ -248,7 +269,9 @@ public sealed partial class SearchFiltersViewModel : ViewModelBase
         SelectedDatePreset.Value,
         CustomFromDate,
         CustomToDate,
-        SearchBlockedFolders.Select(b => b.Path).ToList());
+        SearchBlockedFolders.Select(b => b.Path).ToList(),
+        SortColumn.ToString(),
+        SortDescending);
 
     /// <summary>Restores previously persisted filter selections without triggering a search — the owner
     /// runs one search itself once restoration (and any folder crawl) is complete.</summary>
@@ -270,6 +293,8 @@ public sealed partial class SearchFiltersViewModel : ViewModelBase
         SearchBlockedFolders.Clear();
         if (state.BlockedPaths is not null)
             foreach (var path in state.BlockedPaths) SearchBlockedFolders.Add(new BlockedFolderViewModel(path));
+        SortColumn = Enum.TryParse<ResultSortColumn>(state.SortColumn, out var column) ? column : ResultSortColumn.Name;
+        SortDescending = state.SortDescending;
         _suppressRaise = false;
     }
 
@@ -303,6 +328,8 @@ public sealed partial class SearchFiltersViewModel : ViewModelBase
         CustomFromDate = null;
         CustomToDate = null;
         SearchBlockedFolders.Clear();
+        SortColumn = ResultSortColumn.Name;
+        SortDescending = false;
         ValidationMessage = "";
         _suppressRaise = false;
         // Everything above was suppressed; fire one change so the owner reruns the (debounced) search.

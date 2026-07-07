@@ -31,6 +31,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IConfirmationService _confirm;
     private readonly ISettingsStore _settingsStore;
     private readonly ISettingsEditor _settingsEditor;
+    private readonly IFilterPresetStore _presetStore;
+    private readonly IPresetSavePrompt _savePrompt;
 
     private AppSettings _settings;
 
@@ -47,14 +49,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _blockedSummary = "";
     [ObservableProperty] private bool _isSidebarExpanded;
 
-    [ObservableProperty] private ResultSortColumn _sortColumn = ResultSortColumn.Name;
-    [ObservableProperty] private bool _sortDescending;
-
     public ObservableCollection<WatchedFolderViewModel> WatchedFolders { get; } = new();
     public ObservableCollection<SearchResultViewModel> Results { get; } = new();
     public SearchFiltersViewModel Filters { get; } = new();
+    public FilterPresetsViewModel Presets { get; }
 
     // --- Sortable column headers ---
+    // The sort order itself lives on Filters (it's part of the filter); these just render the header indicator.
 
     // Header captions carry an arrow for the active sort column so the list header doubles as the indicator.
     public string NameHeader => "Name" + Indicator(ResultSortColumn.Name);
@@ -62,22 +63,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public string SizeHeader => "Size" + Indicator(ResultSortColumn.Size);
     public string ModifiedHeader => "Modified" + Indicator(ResultSortColumn.Modified);
     // The type/extension sort lives on the narrow icon column, so it shows just the arrow (no caption).
-    public string ExtensionIndicator => SortColumn == ResultSortColumn.Extension ? Arrow() : "";
+    public string ExtensionIndicator => Filters.SortColumn == ResultSortColumn.Extension ? Arrow() : "";
 
-    private string Indicator(ResultSortColumn column) => SortColumn == column ? " " + Arrow() : "";
-    private string Arrow() => SortDescending ? "▾" : "▴";
-
-    partial void OnSortColumnChanged(ResultSortColumn value)
-    {
-        RaiseHeaderChanges();
-        SaveUiState();
-    }
-
-    partial void OnSortDescendingChanged(bool value)
-    {
-        RaiseHeaderChanges();
-        SaveUiState();
-    }
+    private string Indicator(ResultSortColumn column) => Filters.SortColumn == column ? " " + Arrow() : "";
+    private string Arrow() => Filters.SortDescending ? "▾" : "▴";
 
     partial void OnIsSidebarExpandedChanged(bool value) => SaveUiState();
 
@@ -103,8 +92,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _confirm = new DialogConfirmationService(() => null);
         _settingsStore = new SettingsStore();
         _settingsEditor = new DialogSettingsEditor(() => null);
+        _presetStore = new FilterPresetStore();
+        _savePrompt = new DialogPresetSavePrompt(() => null);
         _settings = new AppSettings();
         Filters.CriteriaChanged += RerunSearch;
+        Presets = new FilterPresetsViewModel(Filters, _presetStore, _confirm, _savePrompt, RerunSearch);
     }
 
     public MainWindowViewModel(
@@ -117,7 +109,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ISubfolderBlockPicker blockPicker,
         IConfirmationService confirm,
         ISettingsStore? settingsStore = null,
-        ISettingsEditor? settingsEditor = null)
+        ISettingsEditor? settingsEditor = null,
+        IFilterPresetStore? presetStore = null,
+        IPresetSavePrompt? savePrompt = null)
     {
         _crawler = crawler;
         _index = index;
@@ -129,8 +123,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _confirm = confirm;
         _settingsStore = settingsStore ?? new SettingsStore();
         _settingsEditor = settingsEditor ?? new DialogSettingsEditor(() => null);
+        _presetStore = presetStore ?? new FilterPresetStore();
+        _savePrompt = savePrompt ?? new DialogPresetSavePrompt(() => null);
         _settings = _settingsStore.Load();
         Filters.CriteriaChanged += RerunSearch;
+        Presets = new FilterPresetsViewModel(Filters, _presetStore, _confirm, _savePrompt, RerunSearch);
 
         // Restore the saved drawer/sort layout, then start persisting subsequent changes. Subscribe after
         // applying so the restore itself doesn't count as a change (also gated by _persistUiState).
@@ -143,15 +140,26 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         IsSidebarExpanded = _settings.SidebarExpanded;
         Filters.IsExpanded = _settings.FiltersExpanded;
-        if (Enum.TryParse<ResultSortColumn>(_settings.SortColumn, out var column)) SortColumn = column;
-        SortDescending = _settings.SortDescending;
+        if (Enum.TryParse<ResultSortColumn>(_settings.SortColumn, out var column)) Filters.SortColumn = column;
+        Filters.SortDescending = _settings.SortDescending;
         _persistUiState = true;
     }
 
-    /// <summary>Persists the filters drawer state when the user opens/closes it.</summary>
+    /// <summary>Persists the filters drawer state when the user opens/closes it, and keeps the result-list header
+    /// arrow and saved sort in sync when the (filter-owned) sort order changes.</summary>
     private void OnFiltersPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(SearchFiltersViewModel.IsExpanded)) SaveUiState();
+        switch (e.PropertyName)
+        {
+            case nameof(SearchFiltersViewModel.IsExpanded):
+                SaveUiState();
+                break;
+            case nameof(SearchFiltersViewModel.SortColumn):
+            case nameof(SearchFiltersViewModel.SortDescending):
+                RaiseHeaderChanges();
+                SaveUiState();
+                break;
+        }
     }
 
     /// <summary>
@@ -166,8 +174,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         {
             SidebarExpanded = IsSidebarExpanded,
             FiltersExpanded = Filters.IsExpanded,
-            SortColumn = SortColumn.ToString(),
-            SortDescending = SortDescending,
+            SortColumn = Filters.SortColumn.ToString(),
+            SortDescending = Filters.SortDescending,
         };
         _settingsStore.Save(_settings);
     }
@@ -507,15 +515,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         if (!Enum.TryParse<ResultSortColumn>(column, out var target)) return;
 
-        if (target == SortColumn)
-        {
-            SortDescending = !SortDescending;
-        }
-        else
-        {
-            SortColumn = target;
-            SortDescending = false;
-        }
+        // Sort is a filter concern; Filters owns the order (and stars the preset if it changes). The property
+        // change flows back through OnFiltersPropertyChanged to update the header arrow and persist the layout.
+        Filters.ToggleSort(target);
 
         var sorted = SortRows(Results.ToList()).ToList();
         Results.Clear();
@@ -523,7 +525,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     private IEnumerable<SearchResultViewModel> SortRows(IEnumerable<SearchResultViewModel> rows) =>
-        SortColumn switch
+        Filters.SortColumn switch
         {
             ResultSortColumn.Name => Order(rows, r => r.Node.Name, StringComparer.OrdinalIgnoreCase),
             ResultSortColumn.Path => Order(rows, r => r.FullPath, StringComparer.OrdinalIgnoreCase),
@@ -536,7 +538,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private IEnumerable<SearchResultViewModel> Order<TKey>(
         IEnumerable<SearchResultViewModel> rows, Func<SearchResultViewModel, TKey> key, IComparer<TKey>? comparer = null) =>
-        SortDescending ? rows.OrderByDescending(key, comparer) : rows.OrderBy(key, comparer);
+        Filters.SortDescending ? rows.OrderByDescending(key, comparer) : rows.OrderBy(key, comparer);
 
     // --- Helpers ---
 

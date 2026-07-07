@@ -1,0 +1,40 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        x:Class="FileCrawler.Views.SavePresetDialog"
+        Icon="/Assets/app-icon.ico"
+        Width="420" SizeToContent="Height"
+        MaxHeight="520"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Title="Save preset">
+
+    <DockPanel Margin="16">
+
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,14" ColumnDefinitions="Auto,*">
+            <mi:MaterialIcon Grid.Column="0" Kind="ContentSaveOutline" Width="22" Height="22"
+                             VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <TextBlock Grid.Column="1" Text="Save preset" FontWeight="SemiBold" FontSize="15"
+                       VerticalAlignment="Center"/>
+        </Grid>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                    HorizontalAlignment="Right" Spacing="8" Margin="0,20,0,0">
+            <Button x:Name="CancelButton" Content="Cancel" Padding="14,6" Click="OnCancel"/>
+            <Button x:Name="SaveButton" Content="Save" Padding="14,6" Classes="accent" Click="OnSave"/>
+        </StackPanel>
+
+        <StackPanel Spacing="10">
+            <!-- Shown only when a preset is already loaded: choose whether to update it or make a new one. -->
+            <StackPanel x:Name="ChoicePanel" Spacing="6" IsVisible="False">
+                <RadioButton x:Name="UpdateOption" GroupName="SaveMode" IsChecked="True"/>
+                <RadioButton x:Name="NewOption" GroupName="SaveMode" Content="Save as a new preset"/>
+            </StackPanel>
+            <StackPanel x:Name="NamePanel" Spacing="4">
+                <TextBlock Text="Preset name" FontWeight="SemiBold"/>
+                <TextBox x:Name="NameInput" PlaceholderText="e.g. Recents"/>
+            </StackPanel>
+        </StackPanel>
+
+    </DockPanel>
+</Window>

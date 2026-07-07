@@ -32,10 +32,12 @@ namespace FileCrawler
                 var confirm = new DialogConfirmationService(() => window);
                 var settingsStore = new SettingsStore();
                 var settingsEditor = new DialogSettingsEditor(() => window);
+                var presetStore = new FilterPresetStore();
+                var savePrompt = new DialogPresetSavePrompt(() => window);
 
                 var viewModel = new MainWindowViewModel(
                     crawler, index, store, searchStateStore, search, picker, blockPicker, confirm,
-                    settingsStore, settingsEditor);
+                    settingsStore, settingsEditor, presetStore, savePrompt);
                 window.DataContext = viewModel;
                 desktop.MainWindow = window;
 
